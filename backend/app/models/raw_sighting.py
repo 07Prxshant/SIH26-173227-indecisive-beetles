@@ -7,7 +7,7 @@ from typing import Optional
 from uuid import UUID, uuid4
 
 from geoalchemy2 import Geography
-from sqlalchemy import DateTime, Float, Index, Integer, JSON, String, Uuid, func
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -36,6 +36,14 @@ class RawSighting(Base):
     frame_id: Mapped[int] = mapped_column(Integer, nullable=False)
     bbox: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
     image_path: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+    # Assigned by the road-segment resolver before fusion; absent from the ML event contract.
+    road_segment_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    incident_id: Mapped[Optional[UUID]] = mapped_column(
+        Uuid,
+        ForeignKey("verified_incidents.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -11,7 +11,7 @@ def test_raw_sighting_has_required_event_columns() -> None:
     assert {
         "id", "event_id", "track_id", "class", "confidence", "location",
         "latitude", "longitude", "timestamp", "source_id", "frame_id", "bbox",
-        "image_path", "created_at",
+        "image_path", "road_segment_id", "incident_id", "created_at",
     } <= set(columns.keys())
     assert isinstance(columns.location.type, Geography)
     assert columns.event_id.unique is True

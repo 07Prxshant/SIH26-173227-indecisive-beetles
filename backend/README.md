@@ -25,7 +25,13 @@ Initialize or upgrade the local schema from the repository root:
 alembic -c backend/alembic.ini upgrade head
 ```
 
-The migration enables PostGIS and creates `raw_sightings` and `verified_incidents`. To run the optional live database integration test, provide an isolated `URBANSENSE_TEST_DATABASE_URL` database and run `pytest backend/tests -m integration`.
+The migrations enable PostGIS and create `raw_sightings` and `verified_incidents`. Raw sightings retain their resolved `road_segment_id` and the incident they support; these backend-only fields do not alter the shared ML event contract. To run the optional live database integration test, provide an isolated `URBANSENSE_TEST_DATABASE_URL` database and run `pytest backend/tests -m integration`.
+
+## Fusion engine
+
+`SqlAlchemyFusionService.fuse_raw_sighting(event_id, road_segment_id)` processes an already-persisted raw sighting. The caller supplies the road segment returned by its road-matching resolver. The service uses PostGIS `ST_DWithin` with a 15-metre radius, considers only unresolved incidents on that segment, and excludes incidents whose last supporting sighting is outside the 14-day rolling window.
+
+For active sightings, confidence is calculated from the strongest detector confidence plus `0.10` per additional sighting and `0.05` per distinct `source_id` viewpoint, capped at `1.0`. Incidents are dashboard-visible (`verified`) at confidence `>= 0.6` or after at least two active sightings.
 
 ## Kafka or Redpanda ingestion
 
