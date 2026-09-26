@@ -10,7 +10,11 @@ from app.core.config import get_settings
 def create_app() -> FastAPI:
     """Create the configured FastAPI application."""
     settings = get_settings()
-    application = FastAPI(title=settings.service_name)
+    application = FastAPI(
+        title="UrbanSense Dashboard API",
+        version="0.1.0",
+        description="Read-only dashboard API for fused UrbanSense pothole incidents.",
+    )
 
     application.add_middleware(
         CORSMiddleware,

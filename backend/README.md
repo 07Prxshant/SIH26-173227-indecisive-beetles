@@ -52,6 +52,22 @@ pytest backend/tests
 
 The health check is available at `GET http://localhost:8000/health`.
 
+## Dashboard REST API
+
+The OpenAPI document and interactive documentation are available at `/openapi.json` and `/docs` after the server starts. Dashboard routes are:
+
+- `GET /api/v1/incidents` — paginated incidents. Use repeated `status` values, `confidence_min`, and all four map-area coordinates (`min_latitude`, `max_latitude`, `min_longitude`, `max_longitude`) to filter.
+- `GET /api/v1/incidents/{incident_id}` — one dashboard incident.
+- `GET /api/v1/incidents/{incident_id}/sightings` — raw sightings contributing to the incident.
+
+After applying migrations, populate deterministic local map data with:
+
+```bash
+PYTHONPATH=backend python -m app.services.seed_data
+```
+
+The seeding command is idempotent and adds two example incidents only when their fixed IDs are absent.
+
 ## Shared contracts
 
 Do not independently change the shared API shapes. The backend will consume ML event packets defined in `../contracts/event.schema.json` and eventually serve verified incidents described by `../contracts/incident.schema.json` and `../contracts/api.yaml`.
