@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
 from typing import Callable
 from uuid import UUID
 
@@ -15,6 +16,9 @@ from app.models import RawSighting, VerifiedIncident
 from app.services.fusion.engine import FusionEngine, FusionOutcome, FusionRepository
 from app.services.fusion.spatial import PostGISSpatialGate, _incident_from_model
 from app.services.fusion.types import Incident, Sighting
+from app.services.live_incident_publisher import IncidentPublisher, LiveIncidentPublisher
+
+logger = logging.getLogger(__name__)
 
 
 def sighting_from_model(model: RawSighting) -> Sighting:
@@ -88,8 +92,13 @@ class SqlAlchemyFusionRepository(FusionRepository):
 class SqlAlchemyFusionService:
     """Transactional entry point for fusing an already-persisted raw sighting."""
 
-    def __init__(self, session_factory: Callable[[], Session] | None = None) -> None:
+    def __init__(
+        self,
+        session_factory: Callable[[], Session] | None = None,
+        incident_publisher: IncidentPublisher | None = None,
+    ) -> None:
         self._session_factory = session_factory or get_session_factory()
+        self._incident_publisher = incident_publisher or LiveIncidentPublisher()
 
     def fuse_raw_sighting(self, event_id: UUID, road_segment_id: str) -> FusionOutcome:
         """Run all fusion stages and atomically persist their output."""
@@ -102,6 +111,12 @@ class SqlAlchemyFusionService:
             engine = FusionEngine(repository, PostGISSpatialGate(session))
             outcome = engine.fuse(sighting_from_model(model), road_segment_id)
             session.commit()
+            if outcome.promoted and outcome.incident is not None:
+                try:
+                    self._incident_publisher.publish_incident_created(outcome.incident)
+                except Exception:
+                    # Delivery failure must never undo a successfully committed incident.
+                    logger.exception("Unable to publish a live incident update")
             return outcome
         except Exception:
             session.rollback()

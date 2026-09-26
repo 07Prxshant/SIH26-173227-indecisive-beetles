@@ -59,6 +59,7 @@ The OpenAPI document and interactive documentation are available at `/openapi.js
 - `GET /api/v1/incidents` — paginated incidents. Use repeated `status` values, `confidence_min`, and all four map-area coordinates (`min_latitude`, `max_latitude`, `min_longitude`, `max_longitude`) to filter.
 - `GET /api/v1/incidents/{incident_id}` — one dashboard incident.
 - `GET /api/v1/incidents/{incident_id}/sightings` — raw sightings contributing to the incident.
+- `WS /api/v1/live-feed` — broadcasts `incident_created` with the dashboard incident payload when fusion promotes an incident to `verified`. It supports multiple clients and does not publish candidates or resolved incidents.
 
 After applying migrations, populate deterministic local map data with:
 

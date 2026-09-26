@@ -189,6 +189,7 @@ def test_two_corroborating_sightings_promote_incident_at_threshold() -> None:
     assert outcome.dashboard_visible is True
     assert outcome.incident is not None
     assert outcome.incident.status == "verified"
+    assert outcome.promoted is True
     assert outcome.incident.confidence == pytest.approx(0.40)
 
 

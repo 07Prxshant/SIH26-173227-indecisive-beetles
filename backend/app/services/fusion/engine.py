@@ -40,6 +40,7 @@ class FusionOutcome:
     created: bool
     duplicate: bool
     dashboard_visible: bool
+    promoted: bool
 
 
 class FusionEngine:
@@ -62,13 +63,16 @@ class FusionEngine:
     def fuse(self, sighting: Sighting, road_segment_id: str) -> FusionOutcome:
         """Create or update an incident, making duplicate event replays harmless."""
         if self._repository.already_fused(sighting.event_id):
-            return FusionOutcome(None, created=False, duplicate=True, dashboard_visible=False)
+            return FusionOutcome(
+                None, created=False, duplicate=True, dashboard_visible=False, promoted=False
+            )
 
         cutoff = sighting.sighted_at - self._temporal_gate.window
         incident = self._spatial_gate.find_match(sighting, road_segment_id, cutoff)
         created = incident is None
         if incident is None:
             incident = self._repository.create_incident(sighting, road_segment_id)
+        was_verified = incident.status == "verified"
 
         self._repository.attach_sighting(incident, sighting, road_segment_id)
         active_sightings = self._temporal_gate.active_sightings(
@@ -89,4 +93,5 @@ class FusionEngine:
             created=created,
             duplicate=False,
             dashboard_visible=incident.status == "verified",
+            promoted=not was_verified and incident.status == "verified",
         )
