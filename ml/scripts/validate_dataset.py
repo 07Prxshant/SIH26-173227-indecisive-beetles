@@ -9,7 +9,7 @@ label bounding boxes, class mapping, and image-label file pairing.
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
+from typing import Any, Dict, List, Optional, Tuple
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 REQUIRED_CLASS_ID = 0
