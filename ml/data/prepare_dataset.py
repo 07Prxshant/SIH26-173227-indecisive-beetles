@@ -223,8 +223,13 @@ def prepare_dataset(
     random.shuffle(entries)
 
     n_total = len(entries)
-    n_train = int(n_total * train_r)
-    n_val = int(n_total * val_r)
+    if n_total >= 3:
+        n_train = max(1, min(n_total - 2, int(n_total * train_r)))
+        n_val = max(1, min(n_total - n_train - 1, int(n_total * val_r)))
+    elif n_total == 2:
+        n_train, n_val = 1, 1
+    else:
+        n_train, n_val = 1, 0
 
     splits = {
         "train": entries[:n_train],
