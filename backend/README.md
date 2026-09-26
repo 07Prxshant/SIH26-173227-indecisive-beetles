@@ -27,6 +27,16 @@ alembic -c backend/alembic.ini upgrade head
 
 The migration enables PostGIS and creates `raw_sightings` and `verified_incidents`. To run the optional live database integration test, provide an isolated `URBANSENSE_TEST_DATABASE_URL` database and run `pytest backend/tests -m integration`.
 
+## Kafka or Redpanda ingestion
+
+Run Kafka or Redpanda locally and set `KAFKA_BROKERS` (default: `localhost:9092`) and `EVENT_TOPIC` (default: `pothole-events`) in `.env`. Start the consumer from the repository root after applying the database migration:
+
+```bash
+PYTHONPATH=backend python -m app.services.event_consumer
+```
+
+`PotholeEventProducer` is a reusable utility for local replay or ML integration. Both producer and consumer validate messages against `../contracts/event.schema.json`. Invalid records are logged and committed without persistence; database failures are not committed and are retried. `event_id` is unique in `raw_sightings`, so replayed records are idempotent.
+
 ## Run and test
 
 ```bash

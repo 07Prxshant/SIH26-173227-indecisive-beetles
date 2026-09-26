@@ -41,6 +41,18 @@ class Settings(BaseSettings):
         default="change-me",
         validation_alias=AliasChoices("URBANSENSE_POSTGRES_PASSWORD", "POSTGRES_PASSWORD"),
     )
+    kafka_brokers: str = Field(
+        default="localhost:9092",
+        validation_alias=AliasChoices("URBANSENSE_KAFKA_BROKERS", "KAFKA_BROKERS"),
+    )
+    pothole_events_topic: str = Field(
+        default="pothole-events",
+        validation_alias=AliasChoices("URBANSENSE_EVENT_TOPIC", "EVENT_TOPIC"),
+    )
+    kafka_consumer_group: str = Field(
+        default="urbansense-ingestion",
+        validation_alias=AliasChoices("URBANSENSE_KAFKA_CONSUMER_GROUP"),
+    )
 
     model_config = SettingsConfigDict(
         env_file=REPOSITORY_ROOT / ".env",
