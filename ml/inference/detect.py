@@ -18,9 +18,7 @@ Does not depend on Kafka or FastAPI.
 import argparse
 import datetime
 import json
-import os
 import sys
-import time
 from pathlib import Path
 from typing import Dict, List, Tuple, Any, Optional
 
@@ -37,7 +35,10 @@ def generate_iso_timestamp(start_time: datetime.datetime, frame_id: int, fps: fl
     """Calculates UTC ISO 8601 timestamp string for a given frame index."""
     seconds_offset = frame_id / max(1.0, fps)
     frame_time = start_time + datetime.timedelta(seconds=seconds_offset)
-    return frame_time.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    iso_str = frame_time.isoformat()
+    if "+00:00" in iso_str:
+        return iso_str.replace("+00:00", "Z")
+    return iso_str + "Z" if not iso_str.endswith("Z") else iso_str
 
 
 def run_mock_inference(
@@ -128,8 +129,11 @@ def run_opencv_inference(
     source_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """Runs actual YOLOv8 video inference with ByteTrack tracking."""
-    import cv2
-    from ultralytics import YOLO
+    try:
+        import cv2  # type: ignore
+        from ultralytics import YOLO  # type: ignore
+    except ImportError as e:
+        raise ImportError(f"Required package missing for live inference: {e}. Use --mock for mock execution.")
 
     if not video_path.exists():
         raise FileNotFoundError(f"Input video file not found: {video_path}")
@@ -177,7 +181,7 @@ def run_opencv_inference(
             for box in res.boxes:
                 conf = round(float(box.conf[0].item()), 4)
                 xyxy = box.xyxy[0].tolist()
-                x1, y1, x2, y2 = round(xyxy[0], 1), round(xyxy[1], 1), round(xyxy[2], 1), round(xyxy[3], 1)
+                x1, y1, x2, y2 = round(float(xyxy[0]), 1), round(float(xyxy[1]), 1), round(float(xyxy[2]), 1), round(float(xyxy[3]), 1)
 
                 raw_dets.append({
                     "bbox": {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
@@ -191,15 +195,16 @@ def run_opencv_inference(
             det["timestamp"] = generate_iso_timestamp(start_time, frame_id, fps)
             detections.append(det)
             frames_with_dets.add(frame_id)
-            conf_sum += det["confidence"]
+            conf_sum += float(det["confidence"])
 
             if video_writer is not None:
                 bx = det["bbox"]
-                cv2.rectangle(frame, (int(bx["x1"]), int(bx["y1"])), (int(bx["x2"]), int(bx["y2"])), (0, 0, 255), 2)
+                bx_x1, bx_y1, bx_x2, bx_y2 = int(bx["x1"]), int(bx["y1"]), int(bx["x2"]), int(bx["y2"])
+                cv2.rectangle(frame, (bx_x1, bx_y1), (bx_x2, bx_y2), (0, 0, 255), 2)
                 cv2.putText(
                     frame,
                     f"ID:{det['track_id']} {det['confidence']:.2f}",
-                    (int(bx["x1"]), max(15, int(bx["y1"]) - 10)),
+                    (bx_x1, max(15, bx_y1 - 10)),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.5,
                     (0, 0, 255),
@@ -251,8 +256,8 @@ def run_video_inference(
     use_opencv = False
     if not mock:
         try:
-            import cv2
-            import ultralytics
+            import cv2  # type: ignore
+            import ultralytics  # type: ignore
             use_opencv = True
         except ImportError:
             use_opencv = False
