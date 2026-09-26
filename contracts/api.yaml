@@ -1,0 +1,58 @@
+openapi: 3.1.0
+info:
+  title: UrbanSense Incident API
+  version: 0.1.0
+  description: Shared HTTP contract for the UrbanSense MVP backend. Implementation is intentionally deferred.
+servers:
+  - url: http://localhost:8000
+paths:
+  /health:
+    get:
+      summary: Service health check
+      responses:
+        '200':
+          description: Service is healthy
+  /incidents:
+    get:
+      summary: List verified pothole incidents
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [candidate, verified, resolved]
+      responses:
+        '200':
+          description: Incident collection
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Incident'
+  /incidents/{incident_id}:
+    get:
+      summary: Get one pothole incident
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      responses:
+        '200':
+          description: Incident found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
+        '404':
+          description: Incident not found
+components:
+  parameters:
+    IncidentId:
+      name: incident_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    Incident:
+      $ref: ./incident.schema.json

@@ -1,0 +1,38 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# JavaScript
+node_modules/
+dist/
+build/
+.vite/
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Runtime and generated data
+data/raw/
+data/processed/
+*.log
+coverage/
+htmlcov/
+
+# ML artifacts
+*.pt
+*.onnx
+*.engine
+runs/

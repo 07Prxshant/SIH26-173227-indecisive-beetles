@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urbansense.local/contracts/event.schema.json",
+  "title": "UrbanSense Pothole Sighting Event",
+  "description": "A single tracked pothole detection emitted by the ML pipeline.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "class",
+    "bbox",
+    "confidence",
+    "gps_lat",
+    "gps_lon",
+    "timestamp",
+    "track_id",
+    "source_id",
+    "frame_id"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Globally unique event identifier."
+    },
+    "class": {
+      "type": "string",
+      "const": "pothole",
+      "description": "Detected road-defect class for this single-class MVP."
+    },
+    "bbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "description": "Left pixel coordinate." },
+        "y": { "type": "number", "minimum": 0, "description": "Top pixel coordinate." },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "gps_lat": { "type": "number", "minimum": -90, "maximum": 90 },
+    "gps_lon": { "type": "number", "minimum": -180, "maximum": 180 },
+    "timestamp": { "type": "string", "format": "date-time", "description": "UTC detection time." },
+    "track_id": { "type": "string", "minLength": 1, "description": "ByteTrack identity within the source stream." },
+    "source_id": { "type": "string", "minLength": 1, "description": "Video or bus source identifier." },
+    "frame_id": { "type": "integer", "minimum": 0, "description": "Zero-based frame number in the source." },
+    "image_ref": { "type": "string", "minLength": 1, "description": "Optional URI or object-store key for a cropped representative image." },
+    "frame_ref": { "type": "string", "minLength": 1, "description": "Optional URI or object-store key for the source frame." }
+  }
+}
