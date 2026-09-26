@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-UrbanSense - Standalone YOLOv8 Pothole Video Inference Script
+UrbanSense - Standalone YOLOv8 Pothole Video Inference Script with ByteTrack
 
-Processes input MP4 video streams using YOLOv8 pothole detector model.
-Generates frame-level detection records containing:
+Processes input MP4 video streams using YOLOv8 pothole detector and ByteTrack.
+Generates frame-level tracked detection records containing:
   - frame_id
   - timestamp (UTC ISO 8601)
   - bbox (x1, y1, x2, y2)
   - confidence
   - class ("pothole")
+  - track_id
 
 Outputs JSON detection report, detection statistics, and optional annotated video.
 Does not depend on Kafka or FastAPI.
@@ -26,6 +27,8 @@ from typing import Dict, List, Tuple, Any, Optional
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+from ml.tracking.tracker import ByteTracker
 
 CLASS_NAME = "pothole"
 
@@ -47,41 +50,45 @@ def run_mock_inference(
     total_frames: int = 150
 ) -> Dict[str, Any]:
     """
-    Simulates video inference for testing or environments without OpenCV/PyTorch.
-    Generates structured frame-level pothole detections and output files.
+    Simulates video inference and ByteTrack association for testing environments.
+    Generates structured frame-level pothole detections with stable track_ids.
     """
     start_time = datetime.datetime.now(datetime.timezone.utc)
     src_id = source_id or video_path.stem
+    tracker = ByteTracker(track_thresh=conf_thres, low_thresh=0.1, max_time_lost=30)
+    tracker.reset()
 
     detections = []
     frames_with_dets = set()
     conf_sum = 0.0
 
-    # Simulate detecting potholes in specific frames
-    # e.g., frames 15, 16, 45, 46, 90
-    simulated_hit_frames = [15, 16, 45, 46, 90, 91, 120]
+    # Simulated hit frames with 2 separate potholes (left side and right side)
+    hit_frames = [15, 16, 17, 18, 45, 46, 47, 90, 91, 92, 93, 120, 121]
 
     for fid in range(total_frames):
-        if fid in simulated_hit_frames:
-            # Generate 1 or 2 detections per hit frame
-            det_count = 2 if fid in (45, 90) else 1
-            for d_idx in range(det_count):
-                conf = round(min(0.98, max(conf_thres, 0.72 + (fid % 5) * 0.04 + d_idx * 0.05)), 4)
-                x1 = round(100.0 + (fid % 10) * 15.0 + d_idx * 50.0, 1)
-                y1 = round(250.0 + (fid % 5) * 10.0, 1)
-                x2 = round(x1 + 120.0 + (d_idx * 20.0), 1)
-                y2 = round(y1 + 80.0, 1)
-
-                det_record = {
-                    "frame_id": fid,
-                    "timestamp": generate_iso_timestamp(start_time, fid, fps),
-                    "bbox": {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
-                    "confidence": conf,
+        raw_dets = []
+        if fid in hit_frames:
+            # Pothole A (left side)
+            raw_dets.append({
+                "bbox": {"x1": 100.0 + (fid % 5) * 2.0, "y1": 250.0, "x2": 220.0 + (fid % 5) * 2.0, "y2": 330.0},
+                "confidence": round(min(0.98, max(conf_thres, 0.75 + (fid % 4) * 0.05)), 4),
+                "class": CLASS_NAME
+            })
+            # Pothole B (right side) on certain frames
+            if fid in (45, 46, 47, 90, 91, 92, 93):
+                raw_dets.append({
+                    "bbox": {"x1": 400.0, "y1": 200.0 + (fid % 3) * 3.0, "x2": 520.0, "y2": 280.0 + (fid % 3) * 3.0},
+                    "confidence": round(min(0.95, max(conf_thres, 0.70 + (fid % 3) * 0.06)), 4),
                     "class": CLASS_NAME
-                }
-                detections.append(det_record)
-                frames_with_dets.add(fid)
-                conf_sum += conf
+                })
+
+        tracked_dets = tracker.update(raw_dets, fid)
+
+        for det in tracked_dets:
+            det["timestamp"] = generate_iso_timestamp(start_time, fid, fps)
+            detections.append(det)
+            frames_with_dets.add(fid)
+            conf_sum += det["confidence"]
 
     avg_conf = round(conf_sum / max(1, len(detections)), 4) if detections else 0.0
     duration_sec = round(total_frames / max(1.0, fps), 2)
@@ -105,7 +112,7 @@ def run_mock_inference(
     # Optionally create stub annotated video file
     if output_video:
         output_video.parent.mkdir(parents=True, exist_ok=True)
-        output_video.write_text(f"UrbanSense Mock Annotated Video - {src_id}\n", encoding="utf-8")
+        output_video.write_text(f"UrbanSense Mock Tracked Video - {src_id}\n", encoding="utf-8")
 
     return stats
 
@@ -120,7 +127,7 @@ def run_opencv_inference(
     device: str = "cpu",
     source_id: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Runs actual YOLOv8 video inference using OpenCV and Ultralytics."""
+    """Runs actual YOLOv8 video inference with ByteTrack tracking."""
     import cv2
     from ultralytics import YOLO
 
@@ -139,6 +146,9 @@ def run_opencv_inference(
     print(f"Loading YOLOv8 model: {model_path}...")
     model = YOLO(str(model_path))
 
+    tracker = ByteTracker(track_thresh=conf_thres, low_thresh=0.1, max_time_lost=30)
+    tracker.reset()
+
     video_writer = None
     if output_video:
         output_video.parent.mkdir(parents=True, exist_ok=True)
@@ -153,7 +163,7 @@ def run_opencv_inference(
     conf_sum = 0.0
     frame_id = 0
 
-    print(f"Processing video '{video_path.name}' ({total_frames} frames @ {fps:.1f} FPS)...")
+    print(f"Processing video '{video_path.name}' ({total_frames} frames @ {fps:.1f} FPS with ByteTrack)...")
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -161,39 +171,40 @@ def run_opencv_inference(
             break
 
         results = model.predict(frame, conf=conf_thres, imgsz=imgsz, device=device, verbose=False)
+        raw_dets = []
 
         for res in results:
-            boxes = res.boxes
-            for box in boxes:
-                cls_id = int(box.cls[0].item())
+            for box in res.boxes:
                 conf = round(float(box.conf[0].item()), 4)
                 xyxy = box.xyxy[0].tolist()
-
                 x1, y1, x2, y2 = round(xyxy[0], 1), round(xyxy[1], 1), round(xyxy[2], 1), round(xyxy[3], 1)
 
-                det_record = {
-                    "frame_id": frame_id,
-                    "timestamp": generate_iso_timestamp(start_time, frame_id, fps),
+                raw_dets.append({
                     "bbox": {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
                     "confidence": conf,
                     "class": CLASS_NAME
-                }
-                detections.append(det_record)
-                frames_with_dets.add(frame_id)
-                conf_sum += conf
+                })
 
-                # Draw bounding box for annotated video
-                if video_writer is not None:
-                    cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 2)
-                    cv2.putText(
-                        frame,
-                        f"pothole {conf:.2f}",
-                        (int(x1), max(15, int(y1) - 10)),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5,
-                        (0, 0, 255),
-                        2
-                    )
+        tracked_dets = tracker.update(raw_dets, frame_id)
+
+        for det in tracked_dets:
+            det["timestamp"] = generate_iso_timestamp(start_time, frame_id, fps)
+            detections.append(det)
+            frames_with_dets.add(frame_id)
+            conf_sum += det["confidence"]
+
+            if video_writer is not None:
+                bx = det["bbox"]
+                cv2.rectangle(frame, (int(bx["x1"]), int(bx["y1"])), (int(bx["x2"]), int(bx["y2"])), (0, 0, 255), 2)
+                cv2.putText(
+                    frame,
+                    f"ID:{det['track_id']} {det['confidence']:.2f}",
+                    (int(bx["x1"]), max(15, int(bx["y1"]) - 10)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 0, 255),
+                    2
+                )
 
         if video_writer is not None:
             video_writer.write(frame)
@@ -236,10 +247,7 @@ def run_video_inference(
     source_id: Optional[str] = None,
     mock: bool = False
 ) -> Dict[str, Any]:
-    """
-    Main inference interface function. Chooses OpenCV/Ultralytics engine
-    or mock engine based on dependency availability or mock flag.
-    """
+    """Main inference interface function with ByteTrack tracking."""
     use_opencv = False
     if not mock:
         try:
@@ -271,7 +279,7 @@ def run_video_inference(
 
 
 def main(argv: Optional[List[str]] = None) -> None:
-    parser = argparse.ArgumentParser(description="UrbanSense Standalone YOLOv8 Pothole Video Inference")
+    parser = argparse.ArgumentParser(description="UrbanSense Standalone YOLOv8 Pothole Video Inference with ByteTrack")
     parser.add_argument("--video", type=Path, required=True, help="Path to input .mp4 video file")
     parser.add_argument("--model", type=Path, default=Path("ml/models/best.pt"), help="Path to trained YOLOv8 model weights (.pt)")
     parser.add_argument("--output-json", type=Path, default=Path("ml/runs/detect/detections.json"), help="Output path for JSON detection results")
@@ -285,7 +293,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     args = parser.parse_args(argv)
 
     print("==================================================")
-    print("  UrbanSense Standalone Pothole Video Inference   ")
+    print("  UrbanSense Pothole Video Inference + ByteTrack  ")
     print("==================================================")
     print(f"Input Video : {args.video}")
     print(f"Model Path  : {args.model}")
@@ -302,17 +310,17 @@ def main(argv: Optional[List[str]] = None) -> None:
         mock=args.mock
     )
 
-    print("\n--- Detection Summary Statistics ---")
+    print("\n--- Tracked Detection Summary Statistics ---")
     print(f"  Source ID              : {stats['source_id']}")
     print(f"  Total Frames Processed : {stats['total_frames']}")
     print(f"  Duration               : {stats['duration_seconds']} sec")
-    print(f"  Total Pothole Sightings: {stats['total_detections']}")
+    print(f"  Total Tracked Sightings: {stats['total_detections']}")
     print(f"  Frames with Detections : {stats['frames_with_detections']}")
     print(f"  Average Confidence     : {stats['avg_confidence']:.4f}")
     print(f"  JSON Results Saved To  : {args.output_json.resolve()}")
     if args.output_video:
         print(f"  Annotated Video Saved To: {args.output_video.resolve()}")
-    print("------------------------------------")
+    print("--------------------------------------------")
 
 
 if __name__ == "__main__":
