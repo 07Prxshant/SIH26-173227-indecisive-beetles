@@ -1,0 +1,15 @@
+# UrbanSense YOLOv8 Single-Class Pothole Training Configuration
+data: ml/datasets/potholes/dataset.yaml
+model: yolov8n.pt
+epochs: 50
+imgsz: 640
+batch: 16
+device: cpu
+seed: 42
+workers: 4
+project: ml/runs
+name: pothole_yolov8n
+single_cls: true
+exist_ok: true
+patience: 10
+save: true
