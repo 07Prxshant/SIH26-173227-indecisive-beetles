@@ -36,3 +36,6 @@ htmlcov/
 *.onnx
 *.engine
 runs/
+ml/datasets/*
+!ml/datasets/.gitkeep
+

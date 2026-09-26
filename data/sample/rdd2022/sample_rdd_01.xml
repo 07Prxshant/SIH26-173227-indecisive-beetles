@@ -1,0 +1,18 @@
+<annotation>
+    <folder>images</folder>
+    <filename>sample_rdd_01.png</filename>
+    <size>
+        <width>100</width>
+        <height>100</height>
+        <depth>3</depth>
+    </size>
+    <object>
+        <name>D40</name>
+        <bndbox>
+            <xmin>5</xmin>
+            <ymin>10</ymin>
+            <xmax>25</xmax>
+            <ymax>30</ymax>
+        </bndbox>
+    </object>
+</annotation>
