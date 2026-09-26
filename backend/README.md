@@ -15,6 +15,18 @@ python -m pip install -r backend/requirements.txt
 
 Copy the repository `.env.example` to `.env` before running locally. Configuration is read from environment variables, with the `URBANSENSE_` prefix for application settings. `URBANSENSE_CORS_ORIGINS` accepts a JSON array, for example `['http://localhost:5173']` represented as valid JSON: `["http://localhost:5173"]`.
 
+## PostgreSQL + PostGIS
+
+Run PostgreSQL with the PostGIS extension locally. The backend reads the existing `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_PORT` values from the repository `.env`; `POSTGRES_HOST` defaults to `localhost`. Alternatively, set `URBANSENSE_DATABASE_URL` to a complete SQLAlchemy URL such as `postgresql+psycopg://urbansense:change-me@localhost:5432/urbansense`.
+
+Initialize or upgrade the local schema from the repository root:
+
+```bash
+alembic -c backend/alembic.ini upgrade head
+```
+
+The migration enables PostGIS and creates `raw_sightings` and `verified_incidents`. To run the optional live database integration test, provide an isolated `URBANSENSE_TEST_DATABASE_URL` database and run `pytest backend/tests -m integration`.
+
 ## Run and test
 
 ```bash

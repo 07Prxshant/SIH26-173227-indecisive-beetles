@@ -1,1 +1,1 @@
-"""Database integration placeholder for the future PostGIS layer."""
+"""PostgreSQL/PostGIS persistence primitives."""
