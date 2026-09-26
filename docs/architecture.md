@@ -13,7 +13,7 @@ Simulated road video + GPS → YOLOv8 pothole detector → ByteTrack
 
 The ML producer and backend consumer exchange detection packets according to [`contracts/event.schema.json`](../contracts/event.schema.json). The backend publishes API responses using [`contracts/incident.schema.json`](../contracts/incident.schema.json); the HTTP surface is described by [`contracts/api.yaml`](../contracts/api.yaml).
 
-The event contract is intentionally single-class: `class` must be `pothole`. Bounding boxes use pixel `x1`, `y1`, `x2`, and `y2` values. Timestamps are UTC ISO 8601 date-times. A `viewpoint_id` identifies the independent capture viewpoint used by the scorer.
+The event contract is intentionally single-class: `class` must be `pothole`. Bounding boxes use pixel `x1`, `y1`, `x2`, and `y2` values. Timestamps are UTC ISO 8601 date-times. `source_id` and `frame_id` make an event traceable to its video source; `image_ref` and `frame_ref` are optional stored-image references.
 
 ## Fusion logic
 
@@ -29,4 +29,4 @@ The event contract is intentionally single-class: `class` must be `pothole`. Bou
 
 4. **Dashboard threshold:** publish/surface an incident when `confidence >= 0.6` **or** `corroborating_sightings >= 2`.
 
-Backend owns the fusion implementation; ML supplies the detector confidence and viewpoint identity needed to calculate it.
+Backend owns the fusion implementation; ML supplies the detector confidence and traceability fields needed to calculate and audit it. The backend determines distinct viewpoints from its available source metadata.

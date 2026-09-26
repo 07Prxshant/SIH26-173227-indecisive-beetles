@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: UrbanSense Incident API
   version: 0.1.0
-  description: Shared HTTP contract for published UrbanSense incidents. Implementation is intentionally deferred.
+  description: Shared HTTP contract for verified UrbanSense incidents. Implementation is intentionally deferred.
 servers:
   - url: http://localhost:8000
 paths:
@@ -14,13 +14,13 @@ paths:
           description: Service is healthy
   /incidents:
     get:
-      summary: List dashboard-visible pothole incidents
+      summary: List verified pothole incidents
       parameters:
         - name: status
           in: query
           schema:
             type: string
-            enum: [published, resolved]
+            enum: [candidate, verified, resolved]
       responses:
         '200':
           description: Incident collection

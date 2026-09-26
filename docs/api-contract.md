@@ -21,7 +21,10 @@ ML publishes a JSON message for each ByteTrack pothole detection to the Kafka/Re
   "gps_lon": 0.0,
   "timestamp": "2026-09-26T12:00:00Z",
   "track_id": "track-001",
-  "viewpoint_id": "bus-12-front"
+  "source_id": "bus-12-front",
+  "frame_id": 1842,
+  "image_ref": "samples/bus-12/pothole-1842.jpg",
+  "frame_ref": "samples/bus-12/frame-1842.jpg"
 }
 ```
 
@@ -34,13 +37,16 @@ ML publishes a JSON message for each ByteTrack pothole detection to the Kafka/Re
 | `gps_lat`, `gps_lon` | number | WGS84 latitude/longitude. |
 | `timestamp` | RFC 3339 date-time | UTC capture/detection time. |
 | `track_id` | string | ByteTrack identity within the stream. |
-| `viewpoint_id` | string | Independent camera, bus, or capture-pass identity. |
+| `source_id` | string | Video, bus, or camera source identity. |
+| `frame_id` | integer | Zero-based frame number in the source stream. |
+| `image_ref` | string, optional | URI or object-store key for a cropped pothole image. |
+| `frame_ref` | string, optional | URI or object-store key for the full source frame. |
 
 The canonical machine-readable schema is [`../contracts/event.schema.json`](../contracts/event.schema.json).
 
 ## Backend → Frontend verified incident API
 
-Backend exposes dashboard-visible incidents through `GET /incidents`, `GET /incidents/{incident_id}`, and WebSocket `GET /ws/incidents` (upgraded to WebSocket). The same incident object is returned by REST and sent as one WebSocket message.
+Backend exposes verified incidents through `GET /incidents`, `GET /incidents/{incident_id}`, and WebSocket `GET /ws/incidents` (upgraded to WebSocket). The same incident object is returned by REST and sent as one WebSocket message.
 
 ```json
 {
@@ -50,12 +56,11 @@ Backend exposes dashboard-visible incidents through `GET /incidents`, `GET /inci
   "road_segment_id": "road-segment-42",
   "confidence": 0.7,
   "sighting_count": 2,
-  "distinct_viewpoints": 1,
   "first_seen": "2026-09-20T08:30:00Z",
   "last_seen": "2026-09-21T09:00:00Z",
-  "status": "published",
+  "status": "verified",
   "representative_image": "optional-image-reference"
 }
 ```
 
-`representative_image` is optional. A `published` incident must satisfy `confidence >= 0.6` or `sighting_count >= 2`; the latter is the corroborating-sightings count from the fusion engine. The canonical machine-readable schema is [`../contracts/incident.schema.json`](../contracts/incident.schema.json), and the OpenAPI document is [`../contracts/api.yaml`](../contracts/api.yaml).
+`representative_image` is optional. The canonical machine-readable schema is [`../contracts/incident.schema.json`](../contracts/incident.schema.json), and the OpenAPI document is [`../contracts/api.yaml`](../contracts/api.yaml).

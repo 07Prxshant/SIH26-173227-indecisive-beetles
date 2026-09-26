@@ -5,7 +5,7 @@
 - ML owns `/ml`.
 - Backend owns `/backend`.
 - Frontend owns `/frontend`.
-- Infrastructure owns `/infra`.
+- Infrastructure owns local-service configuration.
 - Shared contracts live under `/contracts`.
 
 Do not edit another workstream's directory without coordination. Contract changes must be reviewed by affected producers and consumers and documented in the same commit.

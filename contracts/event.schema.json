@@ -14,7 +14,8 @@
     "gps_lon",
     "timestamp",
     "track_id",
-    "viewpoint_id"
+    "source_id",
+    "frame_id"
   ],
   "properties": {
     "event_id": {
@@ -43,6 +44,9 @@
     "gps_lon": { "type": "number", "minimum": -180, "maximum": 180 },
     "timestamp": { "type": "string", "format": "date-time", "description": "UTC detection time." },
     "track_id": { "type": "string", "minLength": 1, "description": "ByteTrack identity within the source stream." },
-    "viewpoint_id": { "type": "string", "minLength": 1, "description": "Identifier for the independent camera, bus, or capture pass." }
+    "source_id": { "type": "string", "minLength": 1, "description": "Video, bus, or camera source identifier." },
+    "frame_id": { "type": "integer", "minimum": 0, "description": "Zero-based frame number in the source." },
+    "image_ref": { "type": "string", "minLength": 1, "description": "Optional URI or object-store key for a cropped pothole image." },
+    "frame_ref": { "type": "string", "minLength": 1, "description": "Optional URI or object-store key for the full source frame." }
   }
 }
