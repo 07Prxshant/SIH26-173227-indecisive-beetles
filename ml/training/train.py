@@ -10,9 +10,8 @@ import argparse
 import json
 import random
 import sys
-import time
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, List, Any, Optional
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -26,13 +25,13 @@ def set_reproducible_seed(seed: int) -> None:
     """Sets random seed across standard library and ML frameworks if installed."""
     random.seed(seed)
     try:
-        import numpy as np
+        import numpy as np  # type: ignore
         np.random.seed(seed)
     except ImportError:
         pass
 
     try:
-        import torch
+        import torch  # type: ignore
         torch.manual_seed(seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
@@ -108,7 +107,10 @@ def run_mock_training(args: argparse.Namespace) -> Dict[str, Any]:
 
 def run_ultralytics_training(args: argparse.Namespace) -> Dict[str, Any]:
     """Runs actual YOLOv8 training using Ultralytics framework."""
-    from ultralytics import YOLO
+    try:
+        from ultralytics import YOLO  # type: ignore
+    except ImportError as e:
+        raise ImportError(f"Ultralytics package is missing: {e}. Use --mock for mock execution.")
 
     print(f"Loading base YOLOv8 model: {args.model}...")
     model = YOLO(args.model)
@@ -148,7 +150,7 @@ def run_ultralytics_training(args: argparse.Namespace) -> Dict[str, Any]:
     return summary
 
 
-def main(argv: Optional[list] = None) -> None:
+def main(argv: Optional[List[str]] = None) -> None:
     config_defaults = load_train_config()
 
     parser = argparse.ArgumentParser(description="UrbanSense YOLOv8 Single-Class Pothole Training Pipeline")
@@ -182,7 +184,7 @@ def main(argv: Optional[list] = None) -> None:
     use_ultralytics = False
     if not args.mock:
         try:
-            import ultralytics
+            import ultralytics  # type: ignore
             use_ultralytics = True
         except ImportError:
             print("Notice: 'ultralytics' package not found in current Python environment.")

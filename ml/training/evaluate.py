@@ -10,7 +10,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, List, Any, Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -49,7 +49,10 @@ def run_mock_evaluation(args: argparse.Namespace) -> Dict[str, Any]:
 
 def run_ultralytics_evaluation(args: argparse.Namespace) -> Dict[str, Any]:
     """Evaluates YOLOv8 model using Ultralytics framework."""
-    from ultralytics import YOLO
+    try:
+        from ultralytics import YOLO  # type: ignore
+    except ImportError as e:
+        raise ImportError(f"Ultralytics package is missing: {e}. Use --mock for mock execution.")
 
     print(f"Loading trained model: {args.model}...")
     model = YOLO(args.model)
@@ -85,7 +88,7 @@ def run_ultralytics_evaluation(args: argparse.Namespace) -> Dict[str, Any]:
     return metrics
 
 
-def main(argv: Optional[list] = None) -> None:
+def main(argv: Optional[List[str]] = None) -> None:
     parser = argparse.ArgumentParser(description="UrbanSense YOLOv8 Pothole Model Evaluation Script")
     parser.add_argument("--model", type=str, default="ml/runs/pothole_yolov8n/weights/best.pt", help="Path to trained YOLOv8 weights")
     parser.add_argument("--data", type=str, default="ml/datasets/potholes/dataset.yaml", help="Path to dataset.yaml")
@@ -104,7 +107,7 @@ def main(argv: Optional[list] = None) -> None:
     use_ultralytics = False
     if not args.mock:
         try:
-            import ultralytics
+            import ultralytics  # type: ignore
             use_ultralytics = True
         except ImportError:
             print("Notice: 'ultralytics' package not found in current Python environment.")
