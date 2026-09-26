@@ -1,25 +1,32 @@
 # Architecture
 
-UrbanSense processes simulated public-bus video with accompanying GPS telemetry to create confidence-scored pothole incidents.
+UrbanSense (SIH26124) processes simulated road video with accompanying GPS telemetry to create confidence-scored pothole incidents.
 
 ```text
-Video + GPS → YOLOv8 detector → ByteTrack → Event packet builder
-          → Redpanda/Kafka → FastAPI ingestion → PostGIS spatial gate
-          → 14-day temporal gate → confidence scorer → verified incidents
-          → REST + WebSocket → React + Leaflet/Mapbox dashboard
+Simulated road video + GPS → YOLOv8 pothole detector → ByteTrack
+→ Geo-tagged event packet → Kafka/Redpanda topic: pothole-events
+→ FastAPI ingestion → Fusion engine → PostgreSQL + PostGIS
+→ FastAPI REST + WebSocket → React dashboard → Leaflet/Mapbox map
 ```
 
 ## Shared contracts
 
 The ML producer and backend consumer exchange detection packets according to [`contracts/event.schema.json`](../contracts/event.schema.json). The backend publishes API responses using [`contracts/incident.schema.json`](../contracts/incident.schema.json); the HTTP surface is described by [`contracts/api.yaml`](../contracts/api.yaml).
 
-The event contract is intentionally single-class: `class` must be `pothole`. Bounding boxes use pixel `x`, `y`, `width`, and `height` values. Timestamps are UTC ISO 8601 date-times. Optional image and frame references are opaque URI or object-store-key strings.
+The event contract is intentionally single-class: `class` must be `pothole`. Bounding boxes use pixel `x1`, `y1`, `x2`, and `y2` values. Timestamps are UTC ISO 8601 date-times. A `viewpoint_id` identifies the independent capture viewpoint used by the scorer.
 
-## Verification flow
+## Fusion logic
 
-1. The ML pipeline emits one event per tracked detection.
-2. The backend groups geographically close events using PostGIS and checks supporting sightings over a 14-day interval.
-3. The confidence scorer combines supporting evidence and emits an incident lifecycle state.
-4. The dashboard consumes verified incidents via REST and live updates via WebSocket.
+1. **Spatial gate:** snap/map each event to a road segment and match it only with events on the same segment within 15 metres, using PostGIS spatial distance.
+2. **Temporal gate:** retain corroborating sightings in a rolling 14-day window.
+3. **Confidence scorer:**
 
-Spatial thresholds, temporal thresholds, and confidence weighting are backend implementation details; this foundation does not prescribe their exact values.
+   ```text
+   confidence = min(1.0, base_detector_conf
+                    + 0.10 × (corroborating_sightings - 1)
+                    + 0.05 × distinct_viewpoints)
+   ```
+
+4. **Dashboard threshold:** publish/surface an incident when `confidence >= 0.6` **or** `corroborating_sightings >= 2`.
+
+Backend owns the fusion implementation; ML supplies the detector confidence and viewpoint identity needed to calculate it.

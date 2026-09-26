@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://urbansense.local/contracts/incident.schema.json",
-  "title": "UrbanSense Verified Pothole Incident",
-  "description": "An aggregated pothole incident made available by the backend after spatial and temporal verification.",
+  "title": "UrbanSense Published Pothole Incident",
+  "description": "An aggregated pothole incident published by the backend after spatial, temporal, and dashboard-threshold evaluation.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -12,6 +12,7 @@
     "road_segment_id",
     "confidence",
     "sighting_count",
+    "distinct_viewpoints",
     "first_seen",
     "last_seen",
     "status"
@@ -23,12 +24,13 @@
     "road_segment_id": { "type": "string", "minLength": 1 },
     "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
     "sighting_count": { "type": "integer", "minimum": 1 },
+    "distinct_viewpoints": { "type": "integer", "minimum": 1 },
     "first_seen": { "type": "string", "format": "date-time", "description": "UTC time of the first supporting sighting." },
     "last_seen": { "type": "string", "format": "date-time", "description": "UTC time of the latest supporting sighting." },
     "status": {
       "type": "string",
-      "enum": ["candidate", "verified", "resolved"],
-      "description": "Verification lifecycle state."
+      "enum": ["published", "resolved"],
+      "description": "Dashboard-visible lifecycle state."
     },
     "representative_image": { "type": "string", "minLength": 1, "description": "Optional URI or object-store key for the best available image." }
   }

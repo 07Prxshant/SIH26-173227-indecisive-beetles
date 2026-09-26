@@ -13,12 +13,12 @@ Do not edit another workstream's directory without coordination. Contract change
 ## Local setup
 
 1. Copy `.env.example` to `.env` and set an appropriate local database password.
-2. Start the infrastructure skeleton with `docker compose -f infra/docker-compose.yml up` once Docker is available.
+2. Run PostgreSQL with PostGIS and Kafka or Redpanda locally, using the connection settings in `.env`.
 3. Each workstream will add its own package-level setup and test commands.
 
 ## Contract-first workflow
 
-Before integrating services, validate event messages against `contracts/event.schema.json` and API responses against `contracts/incident.schema.json`. `contracts/api.yaml` is the source of truth for the REST surface.
+Before integrating services, validate event messages against `contracts/event.schema.json` and API responses against `contracts/incident.schema.json`. `contracts/api.yaml` and `docs/api-contract.md` define the REST and WebSocket surface.
 
 ## Contribution checks
 

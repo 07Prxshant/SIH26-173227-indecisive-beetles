@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://urbansense.local/contracts/event.schema.json",
   "title": "UrbanSense Pothole Sighting Event",
-  "description": "A single tracked pothole detection emitted by the ML pipeline.",
+  "description": "A single tracked pothole detection emitted by the ML pipeline to the pothole-events topic.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -14,8 +14,7 @@
     "gps_lon",
     "timestamp",
     "track_id",
-    "source_id",
-    "frame_id"
+    "viewpoint_id"
   ],
   "properties": {
     "event_id": {
@@ -31,12 +30,12 @@
     "bbox": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["x", "y", "width", "height"],
+      "required": ["x1", "y1", "x2", "y2"],
       "properties": {
-        "x": { "type": "number", "minimum": 0, "description": "Left pixel coordinate." },
-        "y": { "type": "number", "minimum": 0, "description": "Top pixel coordinate." },
-        "width": { "type": "number", "exclusiveMinimum": 0 },
-        "height": { "type": "number", "exclusiveMinimum": 0 }
+        "x1": { "type": "number", "minimum": 0, "description": "Left pixel coordinate." },
+        "y1": { "type": "number", "minimum": 0, "description": "Top pixel coordinate." },
+        "x2": { "type": "number", "minimum": 0, "description": "Right pixel coordinate." },
+        "y2": { "type": "number", "minimum": 0, "description": "Bottom pixel coordinate." }
       }
     },
     "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
@@ -44,9 +43,6 @@
     "gps_lon": { "type": "number", "minimum": -180, "maximum": 180 },
     "timestamp": { "type": "string", "format": "date-time", "description": "UTC detection time." },
     "track_id": { "type": "string", "minLength": 1, "description": "ByteTrack identity within the source stream." },
-    "source_id": { "type": "string", "minLength": 1, "description": "Video or bus source identifier." },
-    "frame_id": { "type": "integer", "minimum": 0, "description": "Zero-based frame number in the source." },
-    "image_ref": { "type": "string", "minLength": 1, "description": "Optional URI or object-store key for a cropped representative image." },
-    "frame_ref": { "type": "string", "minLength": 1, "description": "Optional URI or object-store key for the source frame." }
+    "viewpoint_id": { "type": "string", "minLength": 1, "description": "Identifier for the independent camera, bus, or capture pass." }
   }
 }
