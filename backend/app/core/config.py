@@ -16,7 +16,9 @@ class Settings(BaseSettings):
     """Runtime settings read from environment variables and the repository .env file."""
 
     service_name: str = "urban-sense-backend"
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    cors_origins: list[str] = Field(
+        default_factory=lambda: ["http://localhost:5173", "http://localhost:8080"]
+    )
     database_url: Optional[str] = Field(
         default=None,
         validation_alias=AliasChoices("URBANSENSE_DATABASE_URL", "DATABASE_URL"),

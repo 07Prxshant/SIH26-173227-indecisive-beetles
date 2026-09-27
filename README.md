@@ -24,7 +24,32 @@ The fusion engine snaps events to road segments, matches sightings within 15 met
 
 ## Local development
 
-Copy `.env.example` to `.env`, then configure local PostgreSQL with PostGIS and Kafka or Redpanda. Each workstream will add its own runtime dependencies and commands. Read [development instructions](docs/development.md) before starting work.
+Copy `.env.example` to `.env`, then configure local PostgreSQL with PostGIS and Kafka or Redpanda. Read [development instructions](docs/development.md) before starting work.
+
+## End-to-end local replay
+
+Start PostgreSQL with PostGIS, Kafka or Redpanda, the FastAPI service, the
+Kafka consumer, and the React dashboard:
+
+```bash
+alembic -c backend/alembic.ini upgrade head
+PYTHONPATH=backend python -m app.services.event_consumer
+uvicorn app.main:app --app-dir backend --reload
+cd frontend && npm install && npm run dev
+```
+
+In a second terminal from the repository root, run the reproducible sample
+route. It checks PostgreSQL/PostGIS and Kafka/Redpanda before publishing two
+schema-valid ML event packets to the exact `pothole-events` topic:
+
+```bash
+./scripts/replay.sh
+```
+
+The second corroborating event is promoted to `verified`, returned by
+`GET /api/v1/incidents`, and broadcast through `WS /api/v1/live-feed`. The
+dashboard fetches verified incidents at startup and adds live messages without
+a page refresh. Set `VITE_API_BASE_URL` for a non-default backend address.
 
 ## Repository structure
 

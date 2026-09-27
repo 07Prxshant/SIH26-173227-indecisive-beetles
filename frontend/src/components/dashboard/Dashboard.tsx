@@ -2,7 +2,7 @@ import { lazy, Suspense, useMemo, useState } from "react";
 import { Activity, ArrowDownRight, ArrowUpRight, Check, ChevronDown, ChevronRight, CircleHelp, Clock3, Crosshair, Eye, Filter, MapPin, Radio, Search, ShieldCheck, SlidersHorizontal, X } from "lucide-react";
 import { ClientOnly } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
-import { mockIncidents } from "@/map/mock-incidents";
+import { useLiveIncidents } from "@/lib/incident-api";
 import type { Incident } from "@/types/incident";
 
 const IncidentMap = lazy(() => import("@/map/IncidentMap"));
@@ -24,14 +24,15 @@ function IncidentPanel({ incident, onClose }: { incident: Incident | undefined; 
 }
 
 export default function Dashboard() {
-  const [selectedId, setSelectedId] = useState<string | null>(mockIncidents[0]?.id ?? null);
+  const incidents = useLiveIncidents();
+  const [selectedId, setSelectedId] = useState<string | null>(() => incidents[0]?.id ?? null);
   const [filter, setFilter] = useState<FilterValue>("All incidents");
   const [query, setQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const selected = mockIncidents.find((item) => item.id === selectedId);
-  const filtered = useMemo(() => mockIncidents.filter((item) => (filter === "All incidents" || item.status === filter) && `${item.id} ${item.area} ${item.roadSegment}`.toLowerCase().includes(query.toLowerCase())), [filter, query]);
-  const verified = mockIncidents.filter((item) => item.status === "Verified").length;
-  const highConfidence = mockIncidents.filter((item) => item.confidence >= 90 && item.status !== "Resolved").length;
+  const selected = incidents.find((item) => item.id === selectedId);
+  const filtered = useMemo(() => incidents.filter((item) => (filter === "All incidents" || item.status === filter) && `${item.id} ${item.area} ${item.roadSegment}`.toLowerCase().includes(query.toLowerCase())), [filter, incidents, query]);
+  const verified = incidents.filter((item) => item.status === "Verified").length;
+  const highConfidence = incidents.filter((item) => item.confidence >= 90 && item.status !== "Resolved").length;
 
   return <div className="dashboard">
     <header className="site-header"><div className="header-inner"><div className="brand"><span className="brand-mark"><span /><span /><span /><span /></span><span>Urban<span>Sense</span></span></div><div className="header-center"><span className="header-divider" />ROAD INTELLIGENCE PLATFORM <span className="header-divider" /></div><div className="header-right"><span className="demo-badge">DEMO MODE</span><span className="header-location"><MapPin size={14} /> Bengaluru, IN</span><span className="header-avatar">US</span></div></div></header>

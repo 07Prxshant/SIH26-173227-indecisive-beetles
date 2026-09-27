@@ -1,0 +1,28 @@
+[
+  {
+    "event_id": "c7fcf4e1-e6ce-42fa-a2bb-8bdc6d9f9a50",
+    "class": "pothole",
+    "bbox": {"x1": 310, "y1": 420, "x2": 510, "y2": 610},
+    "confidence": 0.35,
+    "gps_lat": 12.9754,
+    "gps_lon": 77.6022,
+    "timestamp": "2026-09-26T08:42:00Z",
+    "track_id": "bus-12-track-44",
+    "source_id": "bus-12-front",
+    "frame_id": 1842,
+    "image_ref": "samples/bus-12/pothole-1842.jpg"
+  },
+  {
+    "event_id": "15f2bcbe-2ecc-4d74-a7e8-a95d58d44269",
+    "class": "pothole",
+    "bbox": {"x1": 305, "y1": 417, "x2": 514, "y2": 614},
+    "confidence": 0.35,
+    "gps_lat": 12.97543,
+    "gps_lon": 77.60224,
+    "timestamp": "2026-09-26T08:43:00Z",
+    "track_id": "bus-18-track-11",
+    "source_id": "bus-18-front",
+    "frame_id": 928,
+    "frame_ref": "samples/bus-18/frame-0928.jpg"
+  }
+]

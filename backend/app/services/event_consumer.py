@@ -5,13 +5,16 @@ from __future__ import annotations
 import logging
 import json
 import time
-from typing import Any
+from typing import Any, Mapping
+from uuid import UUID
 
 from kafka import KafkaConsumer, TopicPartition
 
 from app.core.config import get_settings
 from app.services.event_processor import EventProcessor
 from app.services.event_validation import EventValidationError
+from app.services.fusion.persistence import SqlAlchemyFusionService
+from app.services.road_segment import GridRoadSegmentResolver
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +22,17 @@ logger = logging.getLogger(__name__)
 class PotholeEventConsumer:
     """Consume `pothole-events`, validate them, and persist raw sightings."""
 
-    def __init__(self, consumer: KafkaConsumer | None = None, processor: EventProcessor | None = None) -> None:
+    def __init__(
+        self,
+        consumer: KafkaConsumer | None = None,
+        processor: EventProcessor | None = None,
+        fusion_service: SqlAlchemyFusionService | None = None,
+        road_segment_resolver: GridRoadSegmentResolver | None = None,
+    ) -> None:
         settings = get_settings()
         self._processor = processor or EventProcessor()
+        self._fusion_service = fusion_service or SqlAlchemyFusionService()
+        self._road_segment_resolver = road_segment_resolver or GridRoadSegmentResolver()
         self._consumer = consumer or KafkaConsumer(
             settings.pothole_events_topic,
             bootstrap_servers=settings.kafka_brokers.split(","),
@@ -35,7 +46,7 @@ class PotholeEventConsumer:
         while True:
             for message in self._consumer:
                 try:
-                    created = self._processor.process(message.value)
+                    created = self.process_event(message.value)
                 except EventValidationError as error:
                     logger.warning(
                         "Discarding invalid pothole event at %s:%s:%s: %s",
@@ -66,6 +77,15 @@ class PotholeEventConsumer:
                     "created" if created else "duplicate",
                 )
                 self._consumer.commit()
+
+    def process_event(self, event: Mapping[str, Any]) -> bool:
+        """Persist one ML packet and immediately route new sightings into fusion."""
+        created = self._processor.process(event)
+        if created:
+            self._fusion_service.fuse_raw_sighting(
+                UUID(str(event["event_id"])), self._road_segment_resolver.resolve(event)
+            )
+        return created
 
 
 def run_consumer() -> None:
