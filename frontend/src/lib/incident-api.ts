@@ -17,9 +17,15 @@ type ApiIncident = {
   representative_image?: string | null;
 };
 
-const formatSeenAt = (value: string) => new Date(value).toLocaleString("en-IN", {
-  day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false,
-});
+const formatSeenAt = (value: string) =>
+  new Date(value).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 
 const statusFor = (status: ApiIncident["status"]): IncidentStatus => {
   if (status === "verified") return "Verified";
@@ -51,7 +57,7 @@ export function useLiveIncidents(): Incident[] {
   useEffect(() => {
     let active = true;
     void fetch(`${apiBaseUrl}/incidents?status=verified`)
-      .then((response) => response.ok ? response.json() : Promise.reject(response))
+      .then((response) => (response.ok ? response.json() : Promise.reject(response)))
       .then((payload: { items: ApiIncident[] }) => {
         if (active) setIncidents(payload.items.map(toDashboardIncident));
       })
