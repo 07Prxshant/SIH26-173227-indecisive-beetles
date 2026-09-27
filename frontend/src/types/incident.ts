@@ -5,6 +5,9 @@ export interface Incident {
   latitude: number;
   longitude: number;
   confidence: number;
+  detectorConfidence?: number;
+  trackId?: string;
+  sourceId?: string;
   sightingCount: number;
   firstSeen: string;
   lastSeen: string;

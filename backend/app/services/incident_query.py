@@ -50,7 +50,7 @@ class IncidentQueryService:
                 .limit(page_size)
             ).all()
             return IncidentPage(
-                items=[incident_response(model) for model in models],
+                items=[incident_response(model, session) for model in models],
                 total=total,
                 page=page,
                 page_size=page_size,
@@ -63,7 +63,7 @@ class IncidentQueryService:
         session = self._session_factory()
         try:
             model = session.get(VerifiedIncident, incident_id)
-            return incident_response(model) if model is not None else None
+            return incident_response(model, session) if model is not None else None
         finally:
             session.close()
 
@@ -105,8 +105,23 @@ class IncidentQueryService:
         return statement
 
 
-def incident_response(model: VerifiedIncident) -> IncidentResponse:
+def incident_response(model: VerifiedIncident, session: Optional[Session] = None) -> IncidentResponse:
     """Convert a persistence model to the stable public incident shape."""
+    detector_confidence = None
+    track_id = None
+    source_id = None
+
+    if session is not None:
+        latest_sighting = session.scalars(
+            select(RawSighting)
+            .where(RawSighting.incident_id == model.id)
+            .order_by(RawSighting.sighted_at.desc())
+        ).first()
+        if latest_sighting is not None:
+            detector_confidence = latest_sighting.confidence
+            track_id = latest_sighting.track_id
+            source_id = latest_sighting.source_id
+
     return IncidentResponse(
         incident_id=model.id,
         latitude=model.latitude,
@@ -118,6 +133,9 @@ def incident_response(model: VerifiedIncident) -> IncidentResponse:
         last_seen=model.last_seen,
         status=model.status,
         representative_image=model.representative_image,
+        detector_confidence=detector_confidence,
+        track_id=track_id,
+        source_id=source_id,
     )
 
 

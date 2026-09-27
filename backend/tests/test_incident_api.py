@@ -130,6 +130,7 @@ def test_get_incident_returns_documented_shape() -> None:
     assert set(response.json()) == {
         "incident_id", "latitude", "longitude", "road_segment_id", "confidence",
         "sighting_count", "first_seen", "last_seen", "status", "representative_image",
+        "detector_confidence", "track_id", "source_id",
     }
     assert response.json()["status"] == "verified"
 

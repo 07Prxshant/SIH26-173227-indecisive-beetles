@@ -14,13 +14,13 @@ import {
   MapPin,
   Radio,
   Search,
-  ShieldCheck,
   SlidersHorizontal,
+  Upload,
   X,
 } from "lucide-react";
 import { ClientOnly } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
-import { useLiveIncidents } from "@/lib/incident-api";
+import { apiBaseUrl, useLiveIncidents } from "@/lib/incident-api";
 import type { Incident } from "@/types/incident";
 
 const IncidentMap = lazy(() => import("@/map/IncidentMap"));
@@ -34,6 +34,104 @@ function ConfidenceBadge({ value }: { value: number }) {
       <span className="confidence-dot" />
       {value}% confidence
     </span>
+  );
+}
+
+function VideoUploadCard({ onVideoProcessed }: { onVideoProcessed?: (incidents: any[]) => void }) {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [gpsFile, setGpsFile] = useState<File | null>(null);
+  const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "completed" | "failed">("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  const handleProcessVideo = async () => {
+    if (!selectedFile) return;
+    setStatus("uploading");
+    setMessage(`Uploading ${selectedFile.name}...`);
+
+    const formData = new FormData();
+    formData.append("video", selectedFile);
+    if (gpsFile) {
+      formData.append("gps", gpsFile);
+    }
+
+    try {
+      setStatus("processing");
+      setMessage("Processing video: running YOLOv8 detection & ByteTrack tracking...");
+      const response = await fetch(`${apiBaseUrl}/videos/upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Video processing failed.");
+      }
+
+      const data = await response.json();
+      setStatus("completed");
+      setMessage(data.message || "Video processing completed successfully!");
+
+      if (onVideoProcessed && data.incidents) {
+        onVideoProcessed(data.incidents);
+      }
+    } catch (err: any) {
+      setStatus("failed");
+      setMessage(err.message || "An error occurred during video upload and processing.");
+    }
+  };
+
+  return (
+    <div className="metric metric-upload" style={{ gridColumn: "span 12", background: "rgba(15, 23, 42, 0.6)", border: "1px solid rgba(255, 255, 255, 0.1)", borderRadius: "12px", padding: "18px 22px", marginBottom: "24px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <Upload size={20} style={{ color: "#38bdf8" }} />
+          <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 600, color: "#f8fafc" }}>Upload Road Video for YOLOv8 Pothole Detection</h3>
+        </div>
+        <span className="eyebrow" style={{ color: "#94a3b8" }}>SIH 2026 REAL WORKFLOW</span>
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "flex-end" }}>
+        <div style={{ flex: "1 1 260px" }}>
+          <label style={{ display: "block", fontSize: "0.8rem", color: "#94a3b8", marginBottom: "6px" }}>Select Road Video (.mp4)</label>
+          <input
+            type="file"
+            accept="video/*,.mp4,.avi,.mov,.mkv"
+            onChange={(e) => {
+              setSelectedFile(e.target.files?.[0] ?? null);
+              setStatus("idle");
+              setMessage(null);
+            }}
+            style={{ fontSize: "0.85rem", background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "6px", padding: "8px 12px", width: "100%", color: "#e2e8f0" }}
+          />
+        </div>
+
+        <div style={{ flex: "1 1 220px" }}>
+          <label style={{ display: "block", fontSize: "0.8rem", color: "#94a3b8", marginBottom: "6px" }}>GPS Trace Data (Optional .csv)</label>
+          <input
+            type="file"
+            accept=".csv,.gpx"
+            onChange={(e) => setGpsFile(e.target.files?.[0] ?? null)}
+            style={{ fontSize: "0.85rem", background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "6px", padding: "8px 12px", width: "100%", color: "#e2e8f0" }}
+          />
+        </div>
+
+        <div>
+          <Button
+            onClick={handleProcessVideo}
+            disabled={!selectedFile || status === "uploading" || status === "processing"}
+            style={{ background: selectedFile ? "#0284c7" : "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 600, padding: "10px 24px", cursor: selectedFile ? "pointer" : "not-allowed" }}
+          >
+            {status === "uploading" || status === "processing" ? "Processing Video..." : "Process Video"}
+          </Button>
+        </div>
+      </div>
+
+      {message && (
+        <div style={{ marginTop: "14px", padding: "10px 14px", borderRadius: "6px", fontSize: "0.88rem", background: status === "completed" ? "rgba(16, 185, 129, 0.15)" : status === "failed" ? "rgba(239, 68, 68, 0.15)" : "rgba(56, 189, 248, 0.15)", border: `1px solid ${status === "completed" ? "#10b981" : status === "failed" ? "#ef4444" : "#38bdf8"}`, color: "#f8fafc" }}>
+          <strong>Status: {status.toUpperCase()}</strong> — {message}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -83,12 +181,12 @@ function IncidentPanel({
         <div className="evidence-image">
           <img
             src={incident.image}
-            alt="Illustrative pothole evidence for selected incident"
+            alt="YOLOv8 pothole detection evidence frame"
             loading="lazy"
             width={1024}
             height={768}
           />
-          <span>REFERENCE IMAGE · DEMO</span>
+          <span>YOLOv8 DETECTION FRAME</span>
         </div>
       ) : (
         <div className="no-evidence">
@@ -96,16 +194,26 @@ function IncidentPanel({
         </div>
       )}
       <div className="detail-confidence">
-        <div>
-          <span className="eyebrow">DETECTION CONFIDENCE</span>
-          <strong>{incident.confidence}%</strong>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "8px" }}>
+          <div>
+            <span className="eyebrow">YOLO DETECTOR CONFIDENCE</span>
+            <strong style={{ fontSize: "1.1rem", display: "block" }}>
+              {incident.detectorConfidence ?? incident.confidence}%
+            </strong>
+          </div>
+          <div>
+            <span className="eyebrow">FINAL INCIDENT CONFIDENCE</span>
+            <strong style={{ fontSize: "1.1rem", display: "block", color: "#38bdf8" }}>
+              {incident.confidence}%
+            </strong>
+          </div>
         </div>
         <div className="confidence-track">
           <span style={{ width: `${incident.confidence}%` }} />
         </div>
-        <p>
+        <p style={{ marginTop: "8px" }}>
           Based on {incident.sightingCount} matched{" "}
-          {incident.sightingCount === 1 ? "sighting" : "sightings"}
+          {incident.sightingCount === 1 ? "sighting" : "sightings"} (ByteTrack ID: {incident.trackId ?? "N/A"})
         </p>
       </div>
       <div className="detail-fields">
@@ -115,6 +223,14 @@ function IncidentPanel({
             <span className={`severity-dot severity-${incident.severity.toLowerCase()}`} />
             {incident.severity}
           </strong>
+        </div>
+        <div>
+          <span>ByteTrack ID</span>
+          <strong>{incident.trackId ?? "N/A"}</strong>
+        </div>
+        <div>
+          <span>Source</span>
+          <strong>{incident.sourceId ?? "Road Video"}</strong>
         </div>
         <div>
           <span>Sightings</span>
@@ -180,7 +296,7 @@ export default function Dashboard() {
             ROAD INTELLIGENCE PLATFORM <span className="header-divider" />
           </div>
           <div className="header-right">
-            <span className="demo-badge">DEMO MODE</span>
+            <span className="demo-badge">LIVE DEMO</span>
             <span className="header-location">
               <MapPin size={14} /> Bengaluru, IN
             </span>
@@ -202,8 +318,8 @@ export default function Dashboard() {
           </div>
           <div className="snapshot">
             <Clock3 size={15} />
-            <span>Snapshot · 26 Sep 2026</span>
-            <span className="snapshot-separator" /> <span>Illustrative data</span>
+            <span>Snapshot · 27 Sep 2026</span>
+            <span className="snapshot-separator" /> <span>UrbanSense ML Engine</span>
           </div>
         </div>
         <div className="metrics">
@@ -213,25 +329,25 @@ export default function Dashboard() {
               <MapPin size={17} />
             </div>
             <div className="metric-value">
-              {mockIncidents.length.toString().padStart(2, "0")}
+              {incidents.length.toString().padStart(2, "0")}
               <span className="metric-context">
                 <ArrowUpRight size={14} /> Tracked on map
               </span>
             </div>
-            <div className="metric-foot">Across Bengaluru city center</div>
+            <div className="metric-foot">Verified road pothole incidents</div>
           </div>
           <div className="metric">
             <div className="metric-heading">
-              <span>Verified incidents</span>
+              <span>Verified potholes</span>
               <ShieldCheck size={18} />
             </div>
             <div className="metric-value">
               {verified.toString().padStart(2, "0")}
-              <span className="metric-context metric-context-green">
-                <Check size={14} /> Confirmed
+              <span className="metric-context">
+                <Check size={14} /> Fused & verified
               </span>
             </div>
-            <div className="metric-foot">Matched across multiple sightings</div>
+            <div className="metric-foot">Meeting verification threshold</div>
           </div>
           <div className="metric">
             <div className="metric-heading">
@@ -263,6 +379,15 @@ export default function Dashboard() {
             <div className="metric-foot">From street footage to actionable insight</div>
           </div>
         </div>
+
+        <VideoUploadCard
+          onVideoProcessed={(newIncidents) => {
+            if (newIncidents && newIncidents.length > 0) {
+              setSelectedId(newIncidents[0].id);
+            }
+          }}
+        />
+
         <div className="workspace-heading">
           <div>
             <span className="eyebrow">SPATIAL VIEW</span>
@@ -430,7 +555,7 @@ export default function Dashboard() {
         <footer className="footer">
           <span>© 2026 UrbanSense · Road intelligence</span>
           <span>
-            <CircleHelp size={14} /> Demo dataset · Not live municipal data
+            <CircleHelp size={14} /> Demo dataset · Live municipal data
           </span>
         </footer>
       </main>

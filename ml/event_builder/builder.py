@@ -63,7 +63,8 @@ class PotholeEventBuilder:
         if self.gps_synchronizer and not self.gps_synchronizer.is_empty():
             gps_lat, gps_lon = self.gps_synchronizer.get_gps_at_time(
                 target_time=detection["timestamp"],
-                offset_seconds=self.offset_seconds
+                offset_seconds=self.offset_seconds,
+                default_coords=(12.97530, 77.60210)
             )
         else:
             gps_lat = float(detection.get("gps_lat", 0.0))
@@ -92,6 +93,11 @@ class PotholeEventBuilder:
             "source_id": str(source_id or self.source_id),
             "frame_id": int(detection["frame_id"])
         }
+
+        if "frame_ref" in detection:
+            event_packet["frame_ref"] = str(detection["frame_ref"])
+        elif "image_ref" in detection:
+            event_packet["image_ref"] = str(detection["image_ref"])
 
         # Validate against schema contract
         is_valid, errors = validate_event(event_packet)

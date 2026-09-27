@@ -44,3 +44,7 @@ ml/models/*
 
 
 
+
+# Uploads
+data/uploads/*
+!data/uploads/.gitkeep

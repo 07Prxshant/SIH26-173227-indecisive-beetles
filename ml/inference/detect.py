@@ -148,7 +148,8 @@ def run_opencv_inference(
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 480
 
     print(f"Loading YOLOv8 model: {model_path}...")
-    model = YOLO(str(model_path))
+    model_to_load = str(model_path) if model_path.exists() else "yolov8n.pt"
+    model = YOLO(model_to_load)
 
     tracker = ByteTracker(track_thresh=conf_thres, low_thresh=0.1, max_time_lost=30)
     tracker.reset()
@@ -191,8 +192,32 @@ def run_opencv_inference(
 
         tracked_dets = tracker.update(raw_dets, frame_id)
 
+        frames_dir = Path("data/uploads/frames")
+        frames_dir.mkdir(parents=True, exist_ok=True)
+
         for det in tracked_dets:
             det["timestamp"] = generate_iso_timestamp(start_time, frame_id, fps)
+            det["frame_id"] = frame_id
+            
+            frame_filename = f"{src_id}_frame_{frame_id}.jpg"
+            frame_path = frames_dir / frame_filename
+            if not frame_path.exists():
+                bx = det["bbox"]
+                bx_x1, bx_y1, bx_x2, bx_y2 = int(bx["x1"]), int(bx["y1"]), int(bx["x2"]), int(bx["y2"])
+                annotated = frame.copy()
+                cv2.rectangle(annotated, (bx_x1, bx_y1), (bx_x2, bx_y2), (0, 0, 255), 2)
+                cv2.putText(
+                    annotated,
+                    f"POTHOLE {det['confidence']:.2f}",
+                    (bx_x1, max(18, bx_y1 - 10)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (0, 0, 255),
+                    2
+                )
+                cv2.imwrite(str(frame_path), annotated)
+
+            det["frame_ref"] = f"/uploads/frames/{frame_filename}"
             detections.append(det)
             frames_with_dets.add(frame_id)
             conf_sum += float(det["confidence"])

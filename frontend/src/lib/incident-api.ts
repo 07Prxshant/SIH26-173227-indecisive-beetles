@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { mockIncidents } from "@/map/mock-incidents";
 import type { Incident, IncidentStatus } from "@/types/incident";
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
+export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
-type ApiIncident = {
+export type ApiIncident = {
   incident_id: string;
   latitude: number;
   longitude: number;
@@ -15,6 +15,9 @@ type ApiIncident = {
   last_seen: string;
   status: "candidate" | "verified" | "resolved";
   representative_image?: string | null;
+  detector_confidence?: number | null;
+  track_id?: string | null;
+  source_id?: string | null;
 };
 
 const formatSeenAt = (value: string) =>
@@ -35,11 +38,24 @@ const statusFor = (status: ApiIncident["status"]): IncidentStatus => {
 
 export const toDashboardIncident = (incident: ApiIncident): Incident => {
   const confidence = Math.round(incident.confidence * 100);
+  const detectorConfidence = incident.detector_confidence != null
+    ? Math.round(incident.detector_confidence * 100)
+    : undefined;
+
+  let imageUrl = incident.representative_image ?? undefined;
+  if (imageUrl && imageUrl.startsWith("/")) {
+    const host = apiBaseUrl.replace(/\/api\/v1\/?$/, "");
+    imageUrl = `${host}${imageUrl}`;
+  }
+
   return {
     id: incident.incident_id,
     latitude: incident.latitude,
     longitude: incident.longitude,
     confidence,
+    detectorConfidence,
+    trackId: incident.track_id ?? undefined,
+    sourceId: incident.source_id ?? undefined,
     sightingCount: incident.sighting_count,
     firstSeen: formatSeenAt(incident.first_seen),
     lastSeen: formatSeenAt(incident.last_seen),
@@ -47,7 +63,7 @@ export const toDashboardIncident = (incident: ApiIncident): Incident => {
     area: incident.road_segment_id,
     status: statusFor(incident.status),
     severity: confidence >= 90 ? "High" : confidence >= 70 ? "Medium" : "Low",
-    image: incident.representative_image ?? undefined,
+    image: imageUrl,
   };
 };
 
@@ -59,16 +75,18 @@ export function useLiveIncidents(): Incident[] {
     let socket: WebSocket | null = null;
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
-    const fetchVerifiedIncidents = () => {
-      void fetch(`${apiBaseUrl}/incidents?status=verified`)
+    const fetchAllIncidents = () => {
+      void fetch(`${apiBaseUrl}/incidents`)
         .then((response) => (response.ok ? response.json() : Promise.reject(response)))
         .then((payload: { items: ApiIncident[] }) => {
-          if (active) setIncidents(payload.items.map(toDashboardIncident));
+          if (active && payload.items && payload.items.length > 0) {
+            setIncidents(payload.items.map(toDashboardIncident));
+          }
         })
         .catch(() => undefined);
     };
 
-    fetchVerifiedIncidents();
+    fetchAllIncidents();
 
     const connectWebSocket = () => {
       if (!active) return;

@@ -33,6 +33,9 @@ class IncidentResponse(BaseModel):
     last_seen: datetime
     status: IncidentStatus
     representative_image: Optional[str] = None
+    detector_confidence: Optional[float] = None
+    track_id: Optional[str] = None
+    source_id: Optional[str] = None
 
 
 class IncidentPage(BaseModel):

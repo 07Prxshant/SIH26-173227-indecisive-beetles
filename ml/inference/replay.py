@@ -80,9 +80,14 @@ def run_replay(
         gps_sync = GPSSynchronizer(samples)
         print(f"[ML] Loaded {len(samples)} GPS samples from '{gps_path.name}'.")
     else:
-        # Fallback default coordinates if GPS file missing
-        gps_sync = GPSSynchronizer.from_file(Path("data/sample/sample_gps.csv")) if Path("data/sample/sample_gps.csv").exists() else None
-        print("[ML] Using synchronized route coordinates fallback.")
+        sample_gps = Path("data/sample/sample_gps.csv")
+        if sample_gps.exists():
+            samples = parse_gps_file(sample_gps)
+            gps_sync = GPSSynchronizer(samples)
+            print(f"[ML] Loaded {len(samples)} fallback GPS samples from '{sample_gps.name}'.")
+        else:
+            gps_sync = None
+            print("[ML] Using default route coordinates fallback.")
 
     # 3. Build schema-validated event packets
     builder = PotholeEventBuilder(
