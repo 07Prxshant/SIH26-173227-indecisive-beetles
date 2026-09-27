@@ -50,9 +50,23 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+type LocationMode = "manual" | "device";
+
 function VideoUploadCard({ onVideoProcessed }: { onVideoProcessed?: (incidents: any[]) => void }) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [gpsFile, setGpsFile] = useState<File | null>(null);
+
+  // Location selection state
+  const [locationMode, setLocationMode] = useState<LocationMode>("manual");
+  const [manualLat, setManualLat] = useState<string>("12.9753");
+  const [manualLon, setManualLon] = useState<string>("77.6021");
+
+  // Device location state
+  const [deviceLocation, setDeviceLocation] = useState<{ lat: number; lon: number; accuracy?: number } | null>(null);
+  const [deviceLocStatus, setDeviceLocStatus] = useState<"idle" | "requesting" | "success" | "error">("idle");
+  const [deviceLocError, setDeviceLocError] = useState<string | null>(null);
+
+  // Processing state
   const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "completed" | "failed">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [stats, setStats] = useState<{ frames?: number; sightings?: number; events?: number } | null>(null);
@@ -60,8 +74,59 @@ function VideoUploadCard({ onVideoProcessed }: { onVideoProcessed?: (incidents: 
   const videoInputRef = useRef<HTMLInputElement>(null);
   const gpsInputRef = useRef<HTMLInputElement>(null);
 
+  // Compute active location coordinates
+  const activeLocation = useMemo(() => {
+    if (locationMode === "device" && deviceLocation) {
+      return { lat: deviceLocation.lat, lon: deviceLocation.lon, valid: true };
+    }
+    const lat = parseFloat(manualLat);
+    const lon = parseFloat(manualLon);
+    const isValid = !isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+    return { lat, lon, valid: isValid };
+  }, [locationMode, deviceLocation, manualLat, manualLon]);
+
+  const requestDeviceLocation = () => {
+    if (typeof window === "undefined" || !navigator.geolocation) {
+      setDeviceLocStatus("error");
+      setDeviceLocError("Geolocation API is not supported by your browser. Please enter location manually.");
+      setLocationMode("manual");
+      return;
+    }
+
+    setDeviceLocStatus("requesting");
+    setDeviceLocError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = Math.round(position.coords.latitude * 10000) / 10000;
+        const lon = Math.round(position.coords.longitude * 10000) / 10000;
+        const acc = position.coords.accuracy ? Math.round(position.coords.accuracy) : undefined;
+        setDeviceLocation({ lat, lon, accuracy: acc });
+        setDeviceLocStatus("success");
+      },
+      (err) => {
+        let msg = "Unable to access your device location.";
+        if (err.code === err.PERMISSION_DENIED) {
+          msg = "Location permission was denied. Please enter the location manually.";
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          msg = "Device location is currently unavailable. Please enter the location manually.";
+        } else if (err.code === err.TIMEOUT) {
+          msg = "Location request timed out. Please enter the location manually.";
+        }
+        setDeviceLocStatus("error");
+        setDeviceLocError(msg);
+        setLocationMode("manual");
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
+  };
+
   const handleProcessVideo = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile || !activeLocation.valid) return;
     setStatus("uploading");
     setMessage(`Uploading road footage (${selectedFile.name})...`);
     setStats(null);
@@ -71,10 +136,12 @@ function VideoUploadCard({ onVideoProcessed }: { onVideoProcessed?: (incidents: 
     if (gpsFile) {
       formData.append("gps", gpsFile);
     }
+    formData.append("latitude", activeLocation.lat.toString());
+    formData.append("longitude", activeLocation.lon.toString());
 
     try {
       setStatus("processing");
-      setMessage("Running YOLOv8 inference & ByteTrack multi-object tracking...");
+      setMessage(`Running YOLOv8 inference & ByteTrack tracking at (${activeLocation.lat}, ${activeLocation.lon})...`);
       const response = await fetch(`${apiBaseUrl}/videos/upload`, {
         method: "POST",
         body: formData,
@@ -203,7 +270,7 @@ function VideoUploadCard({ onVideoProcessed }: { onVideoProcessed?: (incidents: 
           <button
             className="btn-process"
             onClick={handleProcessVideo}
-            disabled={!selectedFile || status === "uploading" || status === "processing"}
+            disabled={!selectedFile || !activeLocation.valid || status === "uploading" || status === "processing"}
           >
             {status === "uploading" || status === "processing" ? (
               <>
@@ -216,6 +283,137 @@ function VideoUploadCard({ onVideoProcessed }: { onVideoProcessed?: (incidents: 
             )}
           </button>
         </div>
+
+        {selectedFile && (
+          <div style={{ marginTop: "18px", paddingTop: "16px", borderTop: "1px solid var(--border)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+              <label style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--foreground)", display: "flex", alignItems: "center", gap: "8px" }}>
+                <MapPin size={16} style={{ color: "var(--primary)" }} /> Where was this video recorded?
+              </label>
+              <span style={{ fontSize: "0.75rem", color: "var(--muted-foreground)" }}>Select geographic location method</span>
+            </div>
+
+            <div style={{ display: "flex", gap: "24px", marginBottom: "14px", flexWrap: "wrap" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer", color: "var(--foreground)" }}>
+                <input
+                  type="radio"
+                  name="locationMode"
+                  checked={locationMode === "manual"}
+                  onChange={() => setLocationMode("manual")}
+                />
+                <span>Enter location manually</span>
+              </label>
+
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer", color: "var(--foreground)" }}>
+                <input
+                  type="radio"
+                  name="locationMode"
+                  checked={locationMode === "device"}
+                  onChange={() => {
+                    setLocationMode("device");
+                    if (!deviceLocation && deviceLocStatus === "idle") {
+                      requestDeviceLocation();
+                    }
+                  }}
+                />
+                <span>Use my current location</span>
+              </label>
+            </div>
+
+            {locationMode === "manual" && (
+              <div style={{ background: "var(--background)", padding: "14px 16px", borderRadius: "8px", border: "1px solid var(--border)" }}>
+                <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", alignItems: "flex-end" }}>
+                  <div style={{ flex: "1 1 140px" }}>
+                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "var(--muted-foreground)", marginBottom: "4px" }}>Latitude (-90 to 90)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={manualLat}
+                      onChange={(e) => setManualLat(e.target.value)}
+                      placeholder="e.g. 12.9753"
+                      style={{ width: "100%", padding: "7px 10px", fontSize: "0.85rem", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--card)", color: "var(--foreground)" }}
+                    />
+                  </div>
+
+                  <div style={{ flex: "1 1 140px" }}>
+                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "var(--muted-foreground)", marginBottom: "4px" }}>Longitude (-180 to 180)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={manualLon}
+                      onChange={(e) => setManualLon(e.target.value)}
+                      placeholder="e.g. 77.6021"
+                      style={{ width: "100%", padding: "7px 10px", fontSize: "0.85rem", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--card)", color: "var(--foreground)" }}
+                    />
+                  </div>
+
+                  <div style={{ flex: "1 1 220px" }}>
+                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "var(--muted-foreground)", marginBottom: "4px" }}>Quick Location Presets</label>
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      <Button variant="outline" size="sm" type="button" onClick={() => { setManualLat("12.9753"); setManualLon("77.6021"); }}>Bengaluru</Button>
+                      <Button variant="outline" size="sm" type="button" onClick={() => { setManualLat("28.6139"); setManualLon("77.2090"); }}>Delhi</Button>
+                      <Button variant="outline" size="sm" type="button" onClick={() => { setManualLat("19.0760"); setManualLon("72.8777"); }}>Mumbai</Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: "12px", fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                  {activeLocation.valid ? (
+                    <span style={{ color: "#10b981", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                      <Check size={14} /> Location valid ({activeLocation.lat}, {activeLocation.lon})
+                    </span>
+                  ) : (
+                    <span style={{ color: "#ef4444", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                      <X size={14} /> Invalid coordinates. Latitude must be -90 to 90, Longitude -180 to 180.
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {locationMode === "device" && (
+              <div style={{ background: "var(--background)", padding: "14px 16px", borderRadius: "8px", border: "1px solid var(--border)" }}>
+                {deviceLocStatus === "requesting" && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", color: "var(--primary)", fontSize: "0.85rem", fontWeight: 600 }}>
+                    <Loader2 size={18} className="animate-spin" /> Requesting your location from device...
+                  </div>
+                )}
+
+                {deviceLocStatus === "success" && deviceLocation && (
+                  <div>
+                    <div style={{ color: "#10b981", fontWeight: 600, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                      <Check size={16} /> Location detected
+                    </div>
+                    <div style={{ display: "flex", gap: "18px", fontSize: "0.85rem", color: "var(--foreground)" }}>
+                      <span><strong>Latitude:</strong> {deviceLocation.lat}</span>
+                      <span><strong>Longitude:</strong> {deviceLocation.lon}</span>
+                      {deviceLocation.accuracy != null && (
+                        <span style={{ color: "var(--muted-foreground)" }}><strong>Accuracy:</strong> {deviceLocation.accuracy}m</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {deviceLocError && (
+                  <div>
+                    <div style={{ color: "#ef4444", fontWeight: 600, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                      <X size={16} /> {deviceLocError}
+                    </div>
+                    <Button variant="outline" size="sm" type="button" onClick={() => setLocationMode("manual")}>
+                      Enter location manually
+                    </Button>
+                  </div>
+                )}
+
+                <div style={{ marginTop: "10px" }}>
+                  <Button variant="ghost" size="sm" type="button" onClick={requestDeviceLocation} style={{ fontSize: "0.78rem" }}>
+                    <Navigation size={13} /> Re-detect location
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {(status === "uploading" || status === "processing") && (
           <div className="progress-bar-track">

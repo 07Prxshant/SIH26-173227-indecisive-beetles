@@ -43,7 +43,8 @@ def run_replay(
     offset_seconds: float = 0.0,
     mock_inference: bool = False,
     dry_run_kafka: bool = False,
-    output_jsonl: Optional[Path] = None
+    output_jsonl: Optional[Path] = None,
+    user_location: Optional[Tuple[float, float]] = None
 ) -> Dict[str, Any]:
     """
     Executes the end-to-end UrbanSense streaming pipeline from video & GPS trace to Kafka.
@@ -94,7 +95,8 @@ def run_replay(
         source_id=src_id,
         gps_synchronizer=gps_sync,
         offset_seconds=offset_seconds,
-        only_new_tracks=True
+        only_new_tracks=True,
+        user_location=user_location
     )
 
     events = builder.process_detections(raw_detections, source_id=src_id)

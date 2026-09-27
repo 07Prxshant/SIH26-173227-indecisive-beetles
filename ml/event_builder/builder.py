@@ -31,12 +31,14 @@ class PotholeEventBuilder:
         source_id: str,
         gps_synchronizer: Optional[GPSSynchronizer] = None,
         offset_seconds: float = 0.0,
-        only_new_tracks: bool = True
+        only_new_tracks: bool = True,
+        user_location: Optional[Tuple[float, float]] = None
     ):
         self.source_id = source_id
         self.gps_synchronizer = gps_synchronizer
         self.offset_seconds = offset_seconds
         self.only_new_tracks = only_new_tracks
+        self.user_location = user_location
         self.seen_tracks: Set[str] = set()
 
     def reset(self) -> None:
@@ -60,15 +62,18 @@ class PotholeEventBuilder:
             self.seen_tracks.add(track_id)
 
         # Retrieve GPS coordinates
+        default_coords = self.user_location if self.user_location else (12.97530, 77.60210)
         if self.gps_synchronizer and not self.gps_synchronizer.is_empty():
             gps_lat, gps_lon = self.gps_synchronizer.get_gps_at_time(
                 target_time=detection["timestamp"],
                 offset_seconds=self.offset_seconds,
-                default_coords=(12.97530, 77.60210)
+                default_coords=default_coords
             )
+        elif self.user_location:
+            gps_lat, gps_lon = self.user_location
         else:
-            gps_lat = float(detection.get("gps_lat", 0.0))
-            gps_lon = float(detection.get("gps_lon", 0.0))
+            gps_lat = float(detection.get("gps_lat", 12.97530))
+            gps_lon = float(detection.get("gps_lon", 77.60210))
 
         # Format timestamp to UTC ISO 8601
         ts_str = str(detection["timestamp"])

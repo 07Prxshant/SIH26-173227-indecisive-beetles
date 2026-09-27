@@ -10,7 +10,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
 from app.core.config import get_settings
@@ -41,7 +41,8 @@ class VideoProcessingResponse(BaseModel):
 def run_ml_pipeline_on_file(
     video_path: Path,
     gps_path: Optional[Path] = None,
-    source_id: Optional[str] = None
+    source_id: Optional[str] = None,
+    user_location: Optional[tuple[float, float]] = None
 ) -> Dict[str, Any]:
     """Execute real ML pipeline on uploaded video, stream events to Kafka and local fusion."""
     from ml.inference.replay import run_replay
@@ -55,7 +56,8 @@ def run_ml_pipeline_on_file(
         topic=settings.pothole_events_topic,
         model_path=Path("ml/models/best.pt"),
         source_id=source_id or video_path.stem,
-        dry_run_kafka=False
+        dry_run_kafka=False,
+        user_location=user_location
     )
 
     processor = EventProcessor()
@@ -103,7 +105,9 @@ def run_ml_pipeline_on_file(
 )
 async def upload_video(
     video: UploadFile = File(...),
-    gps: Optional[UploadFile] = File(None)
+    gps: Optional[UploadFile] = File(None),
+    latitude: Optional[float] = Form(None),
+    longitude: Optional[float] = Form(None)
 ) -> VideoProcessingResponse:
     file_ext = Path(video.filename or "").suffix.lower()
     if file_ext not in ALLOWED_EXTENSIONS:
@@ -148,10 +152,20 @@ async def upload_video(
     }
 
     try:
+        user_loc = None
+        if latitude is not None or longitude is not None:
+            if latitude is None or longitude is None or not (-90.0 <= latitude <= 90.0) or not (-180.0 <= longitude <= 180.0):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid location coordinates. Latitude must be between -90 and 90, and Longitude between -180 and 180."
+                )
+            user_loc = (float(latitude), float(longitude))
+
         result = run_ml_pipeline_on_file(
             video_path=video_dest,
             gps_path=gps_dest,
-            source_id=Path(video.filename or "video").stem
+            source_id=Path(video.filename or "video").stem,
+            user_location=user_loc
         )
 
         potholes = result["potholes_detected"]
