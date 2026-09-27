@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ArrowDownRight,
@@ -8,14 +8,20 @@ import {
   ChevronRight,
   CircleHelp,
   Clock3,
+  Cpu,
   Crosshair,
   Eye,
+  FileSpreadsheet,
+  FileVideo,
   Filter,
+  Loader2,
   MapPin,
+  Play,
   Radio,
   Search,
   ShieldCheck,
   SlidersHorizontal,
+  Sparkles,
   Upload,
   X,
 } from "lucide-react";
@@ -38,16 +44,27 @@ function ConfidenceBadge({ value }: { value: number }) {
   );
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function VideoUploadCard({ onVideoProcessed }: { onVideoProcessed?: (incidents: any[]) => void }) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [gpsFile, setGpsFile] = useState<File | null>(null);
   const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "completed" | "failed">("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [stats, setStats] = useState<{ frames?: number; sightings?: number; events?: number } | null>(null);
+
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const gpsInputRef = useRef<HTMLInputElement>(null);
 
   const handleProcessVideo = async () => {
     if (!selectedFile) return;
     setStatus("uploading");
-    setMessage(`Uploading ${selectedFile.name}...`);
+    setMessage(`Uploading road footage (${selectedFile.name})...`);
+    setStats(null);
 
     const formData = new FormData();
     formData.append("video", selectedFile);
@@ -57,7 +74,7 @@ function VideoUploadCard({ onVideoProcessed }: { onVideoProcessed?: (incidents: 
 
     try {
       setStatus("processing");
-      setMessage("Processing video: running YOLOv8 detection & ByteTrack tracking...");
+      setMessage("Running YOLOv8 inference & ByteTrack multi-object tracking...");
       const response = await fetch(`${apiBaseUrl}/videos/upload`, {
         method: "POST",
         body: formData,
@@ -70,68 +87,163 @@ function VideoUploadCard({ onVideoProcessed }: { onVideoProcessed?: (incidents: 
 
       const data = await response.json();
       setStatus("completed");
-      setMessage(data.message || "Video processing completed successfully!");
+      setMessage(data.message || "Video processed successfully!");
+      setStats({
+        frames: data.total_frames,
+        sightings: data.potholes_detected,
+        events: data.events_generated,
+      });
 
-      if (onVideoProcessed && data.incidents) {
+      if (onVideoProcessed && data.incidents && data.incidents.length > 0) {
         onVideoProcessed(data.incidents);
       }
     } catch (err: any) {
       setStatus("failed");
-      setMessage(err.message || "An error occurred during video upload and processing.");
+      setMessage(err.message || "An error occurred during video processing.");
     }
   };
 
   return (
-    <div className="metric metric-upload" style={{ gridColumn: "span 12", background: "rgba(15, 23, 42, 0.6)", border: "1px solid rgba(255, 255, 255, 0.1)", borderRadius: "12px", padding: "18px 22px", marginBottom: "24px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <Upload size={20} style={{ color: "#38bdf8" }} />
-          <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 600, color: "#f8fafc" }}>Upload Road Video for YOLOv8 Pothole Detection</h3>
+    <div className="upload-card-wrapper">
+      <div className="upload-card">
+        <div className="upload-header">
+          <div className="upload-title-group">
+            <div className="upload-icon-badge">
+              <Cpu size={20} />
+            </div>
+            <div>
+              <h3>Upload Road Video for YOLOv8 Pothole Detection</h3>
+              <p>Feed real street video into the YOLOv8 + ByteTrack pipeline for automated spatial verification</p>
+            </div>
+          </div>
+          <div className="upload-tag-badge">
+            <Sparkles size={12} /> SIH 2026 PIPELINE
+          </div>
         </div>
-        <span className="eyebrow" style={{ color: "#94a3b8" }}>SIH 2026 REAL WORKFLOW</span>
-      </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "flex-end" }}>
-        <div style={{ flex: "1 1 260px" }}>
-          <label style={{ display: "block", fontSize: "0.8rem", color: "#94a3b8", marginBottom: "6px" }}>Select Road Video (.mp4)</label>
-          <input
-            type="file"
-            accept="video/*,.mp4,.avi,.mov,.mkv"
-            onChange={(e) => {
-              setSelectedFile(e.target.files?.[0] ?? null);
+        <input
+          type="file"
+          ref={videoInputRef}
+          style={{ display: "none" }}
+          accept="video/*,.mp4,.avi,.mov,.mkv"
+          onChange={(e) => {
+            if (e.target.files?.[0]) {
+              setSelectedFile(e.target.files[0]);
               setStatus("idle");
               setMessage(null);
-            }}
-            style={{ fontSize: "0.85rem", background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "6px", padding: "8px 12px", width: "100%", color: "#e2e8f0" }}
-          />
-        </div>
+            }
+          }}
+        />
 
-        <div style={{ flex: "1 1 220px" }}>
-          <label style={{ display: "block", fontSize: "0.8rem", color: "#94a3b8", marginBottom: "6px" }}>GPS Trace Data (Optional .csv)</label>
-          <input
-            type="file"
-            accept=".csv,.gpx"
-            onChange={(e) => setGpsFile(e.target.files?.[0] ?? null)}
-            style={{ fontSize: "0.85rem", background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "6px", padding: "8px 12px", width: "100%", color: "#e2e8f0" }}
-          />
-        </div>
+        <input
+          type="file"
+          ref={gpsInputRef}
+          style={{ display: "none" }}
+          accept=".csv,.gpx"
+          onChange={(e) => {
+            if (e.target.files?.[0]) {
+              setGpsFile(e.target.files[0]);
+            }
+          }}
+        />
 
-        <div>
-          <Button
+        <div className="upload-dropzone-grid">
+          <div
+            className={`dropzone-box ${selectedFile ? "dropzone-active" : ""}`}
+            onClick={() => videoInputRef.current?.click()}
+          >
+            <div className="dropzone-info">
+              <FileVideo className="dropzone-icon" size={24} />
+              <div className="dropzone-text">
+                <strong>{selectedFile ? selectedFile.name : "Select Road Video File"}</strong>
+                <span>{selectedFile ? `${formatFileSize(selectedFile.size)} · MP4` : "Click to select .mp4, .avi, .mov footage"}</span>
+              </div>
+            </div>
+            {selectedFile && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedFile(null);
+                  setStatus("idle");
+                  setMessage(null);
+                }}
+              >
+                <X size={15} />
+              </Button>
+            )}
+          </div>
+
+          <div
+            className={`dropzone-box ${gpsFile ? "dropzone-active" : ""}`}
+            onClick={() => gpsInputRef.current?.click()}
+          >
+            <div className="dropzone-info">
+              <FileSpreadsheet className="dropzone-icon" size={22} />
+              <div className="dropzone-text">
+                <strong>{gpsFile ? gpsFile.name : "GPS Trace (Optional)"}</strong>
+                <span>{gpsFile ? formatFileSize(gpsFile.size) : "Synchronize coordinates (.csv)"}</span>
+              </div>
+            </div>
+            {gpsFile && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setGpsFile(null);
+                }}
+              >
+                <X size={15} />
+              </Button>
+            )}
+          </div>
+
+          <button
+            className="btn-process"
             onClick={handleProcessVideo}
             disabled={!selectedFile || status === "uploading" || status === "processing"}
-            style={{ background: selectedFile ? "#0284c7" : "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 600, padding: "10px 24px", cursor: selectedFile ? "pointer" : "not-allowed" }}
           >
-            {status === "uploading" || status === "processing" ? "Processing Video..." : "Process Video"}
-          </Button>
+            {status === "uploading" || status === "processing" ? (
+              <>
+                <Loader2 size={18} className="animate-spin" /> Processing...
+              </>
+            ) : (
+              <>
+                <Play size={16} /> Process Video
+              </>
+            )}
+          </button>
         </div>
-      </div>
 
-      {message && (
-        <div style={{ marginTop: "14px", padding: "10px 14px", borderRadius: "6px", fontSize: "0.88rem", background: status === "completed" ? "rgba(16, 185, 129, 0.15)" : status === "failed" ? "rgba(239, 68, 68, 0.15)" : "rgba(56, 189, 248, 0.15)", border: `1px solid ${status === "completed" ? "#10b981" : status === "failed" ? "#ef4444" : "#38bdf8"}`, color: "#f8fafc" }}>
-          <strong>Status: {status.toUpperCase()}</strong> — {message}
-        </div>
-      )}
+        {(status === "uploading" || status === "processing") && (
+          <div className="progress-bar-track">
+            <div className="progress-bar-fill" style={{ width: status === "uploading" ? "40%" : "85%" }} />
+          </div>
+        )}
+
+        {message && (
+          <div className={`processing-banner ${status === "completed" ? "banner-success" : status === "failed" ? "banner-error" : "banner-processing"}`}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              {status === "completed" && <Check size={18} />}
+              {status === "failed" && <X size={18} />}
+              {(status === "uploading" || status === "processing") && <Loader2 size={18} className="animate-spin" />}
+              <span>{message}</span>
+            </div>
+
+            {stats && (
+              <div style={{ display: "flex", gap: "12px", fontSize: "0.8rem", fontWeight: 600 }}>
+                <span>{stats.frames} Frames</span>
+                <span>·</span>
+                <span>{stats.sightings} Sightings</span>
+                <span>·</span>
+                <span>{stats.events} Kafka Events</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -195,18 +307,18 @@ function IncidentPanel({
         </div>
       )}
       <div className="detail-confidence">
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "8px" }}>
-          <div>
-            <span className="eyebrow">YOLO DETECTOR CONFIDENCE</span>
-            <strong style={{ fontSize: "1.1rem", display: "block" }}>
+        <div className="dual-confidence-wrapper">
+          <div className="confidence-box">
+            <div className="confidence-box-title">YOLO DETECTOR</div>
+            <div className="confidence-box-value">
               {incident.detectorConfidence ?? incident.confidence}%
-            </strong>
+            </div>
           </div>
-          <div>
-            <span className="eyebrow">FINAL INCIDENT CONFIDENCE</span>
-            <strong style={{ fontSize: "1.1rem", display: "block", color: "#38bdf8" }}>
+          <div className="confidence-box">
+            <div className="confidence-box-title">POSTGIS FUSED</div>
+            <div className="confidence-box-value confidence-box-highlight">
               {incident.confidence}%
-            </strong>
+            </div>
           </div>
         </div>
         <div className="confidence-track">
@@ -323,6 +435,7 @@ export default function Dashboard() {
             <span className="snapshot-separator" /> <span>UrbanSense ML Engine</span>
           </div>
         </div>
+
         <div className="metrics">
           <div className="metric">
             <div className="metric-heading">
@@ -556,7 +669,7 @@ export default function Dashboard() {
         <footer className="footer">
           <span>© 2026 UrbanSense · Road intelligence</span>
           <span>
-            <CircleHelp size={14} /> Demo dataset · Live municipal data
+            <CircleHelp size={14} /> Live municipal dataset
           </span>
         </footer>
       </main>
