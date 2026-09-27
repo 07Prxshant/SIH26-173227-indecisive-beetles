@@ -54,7 +54,7 @@ def run_mock_inference(
     Simulates video inference and ByteTrack association for testing environments.
     Generates structured frame-level pothole detections with stable track_ids.
     """
-    start_time = datetime.datetime.now(datetime.timezone.utc)
+    start_time = datetime.datetime(2026, 9, 26, 8, 42, 0, tzinfo=datetime.timezone.utc)
     src_id = source_id or video_path.stem
     tracker = ByteTracker(track_thresh=conf_thres, low_thresh=0.1, max_time_lost=30)
     tracker.reset()

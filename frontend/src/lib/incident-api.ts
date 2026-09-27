@@ -56,24 +56,61 @@ export function useLiveIncidents(): Incident[] {
 
   useEffect(() => {
     let active = true;
-    void fetch(`${apiBaseUrl}/incidents?status=verified`)
-      .then((response) => (response.ok ? response.json() : Promise.reject(response)))
-      .then((payload: { items: ApiIncident[] }) => {
-        if (active) setIncidents(payload.items.map(toDashboardIncident));
-      })
-      .catch(() => undefined);
+    let socket: WebSocket | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
-    const websocketUrl = `${apiBaseUrl.replace(/^http/, "ws")}/live-feed`;
-    const socket = new WebSocket(websocketUrl);
-    socket.onmessage = (event) => {
-      const message = JSON.parse(event.data) as { type?: string; incident?: ApiIncident };
-      if (message.type !== "incident_created" || !message.incident) return;
-      const incoming = toDashboardIncident(message.incident);
-      setIncidents((current) => [incoming, ...current.filter((item) => item.id !== incoming.id)]);
+    const fetchVerifiedIncidents = () => {
+      void fetch(`${apiBaseUrl}/incidents?status=verified`)
+        .then((response) => (response.ok ? response.json() : Promise.reject(response)))
+        .then((payload: { items: ApiIncident[] }) => {
+          if (active) setIncidents(payload.items.map(toDashboardIncident));
+        })
+        .catch(() => undefined);
     };
+
+    fetchVerifiedIncidents();
+
+    const connectWebSocket = () => {
+      if (!active) return;
+      const websocketUrl = `${apiBaseUrl.replace(/^http/, "ws")}/live-feed`;
+      socket = new WebSocket(websocketUrl);
+
+      socket.onopen = () => {
+        console.log("[Frontend] WebSocket connected to live feed");
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data) as { type?: string; incident?: ApiIncident };
+          if (message.type !== "incident_created" || !message.incident) return;
+          const incoming = toDashboardIncident(message.incident);
+          console.log("[Frontend] Incident displayed", incoming);
+          setIncidents((current) => [
+            incoming,
+            ...current.filter((item) => item.id !== incoming.id),
+          ]);
+        } catch (err) {
+          console.warn("[Frontend] Failed to parse WebSocket message:", err);
+        }
+      };
+
+      socket.onclose = () => {
+        if (!active) return;
+        console.warn("[Frontend] WebSocket disconnected. Attempting reconnect in 3s...");
+        reconnectTimeout = setTimeout(connectWebSocket, 3000);
+      };
+
+      socket.onerror = () => {
+        if (socket) socket.close();
+      };
+    };
+
+    connectWebSocket();
+
     return () => {
       active = false;
-      socket.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (socket) socket.close();
     };
   }, []);
 
