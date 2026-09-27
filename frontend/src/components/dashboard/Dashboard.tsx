@@ -14,6 +14,7 @@ import {
   MapPin,
   Radio,
   Search,
+  ShieldCheck,
   SlidersHorizontal,
   Upload,
   X,
