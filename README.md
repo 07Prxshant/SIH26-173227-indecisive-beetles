@@ -43,34 +43,7 @@ React + Leaflet Map Dashboard  (frontend/src/map/IncidentMap.tsx)
 
 ---
 
-## 3. Environment Variables & Configuration
-
-Copy `.env.example` to `.env` before running:
-
-```ini
-# PostgreSQL + PostGIS
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_USER=urbansense
-POSTGRES_PASSWORD=urbansense
-POSTGRES_DB=urbansense
-
-# Kafka / Redpanda
-KAFKA_BOOTSTRAP_SERVERS=localhost:9092
-KAFKA_TOPIC=pothole-events
-KAFKA_CONSUMER_GROUP=urbansense-backend-consumer
-
-# Backend FastAPI
-API_V1_PREFIX=/api/v1
-CORS_ORIGINS=["http://localhost:5173","http://localhost:3000"]
-
-# Frontend React
-VITE_API_BASE_URL=http://localhost:8000/api/v1
-```
-
----
-
-## 4. Setup & Local Installation
+## 3. Setup & Local Installation
 
 ### Prerequisites
 - Python 3.9+
@@ -98,7 +71,7 @@ cd ..
 
 ---
 
-## 5. Model Training (ML)
+## 4. Model Training (ML)
 
 To prepare datasets and train the single-class YOLOv8 pothole detector:
 
@@ -122,7 +95,7 @@ python3 -m ml.training.evaluate --weights ml/models/best.pt --data ml/config/tra
 
 ---
 
-## 6. Inference & Tracking (ML)
+## 5. Inference & Tracking (ML)
 
 Run standalone video inference with ByteTrack multi-object tracking:
 
@@ -137,7 +110,7 @@ python3 -m ml.inference.detect \
 
 ---
 
-## 7. Replay System
+## 6. Replay System
 
 Execute the end-to-end deterministic route replay:
 
@@ -159,7 +132,7 @@ python3 -m ml.inference.replay \
 
 ---
 
-## 8. Backend API & WebSocket Specifications
+## 7. Backend API & WebSocket Specifications
 
 ### REST Endpoints
 - `GET /api/v1/health`: Returns service health status (`{"status": "ok"}`).
@@ -187,7 +160,7 @@ python3 -m ml.inference.replay \
 
 ---
 
-## 9. Frontend Dashboard
+## 8. Frontend Dashboard
 
 Run the React Leaflet dashboard locally:
 
@@ -203,7 +176,7 @@ The application opens at `http://localhost:5173`. Key dashboard features:
 
 ---
 
-## 10. End-to-End Demo Instructions
+## 9. End-to-End Demo Instructions
 
 Follow these steps for a complete live demonstration:
 
