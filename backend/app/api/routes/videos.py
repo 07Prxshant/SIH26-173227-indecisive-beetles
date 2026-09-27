@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from app.core.config import get_settings
@@ -161,7 +162,8 @@ async def upload_video(
                 )
             user_loc = (float(latitude), float(longitude))
 
-        result = run_ml_pipeline_on_file(
+        result = await run_in_threadpool(
+            run_ml_pipeline_on_file,
             video_path=video_dest,
             gps_path=gps_dest,
             source_id=Path(video.filename or "video").stem,

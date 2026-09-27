@@ -166,7 +166,12 @@ function VideoUploadCard({ onVideoProcessed }: { onVideoProcessed?: (incidents: 
       }
     } catch (err: any) {
       setStatus("failed");
-      setMessage(err.message || "An error occurred during video processing.");
+      const errText = err?.message || String(err);
+      if (errText.includes("Failed to fetch")) {
+        setMessage(`Failed to connect to backend server at ${apiBaseUrl}. Please ensure the backend server is running on port 8000.`);
+      } else {
+        setMessage(errText);
+      }
     }
   };
 
