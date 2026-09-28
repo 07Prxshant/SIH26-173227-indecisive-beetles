@@ -1,41 +1,30 @@
-import { Building2, Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 
-export function Header({
-  theme = "light",
-  onToggleTheme,
-  scrollToTop,
-}: {
-  theme?: "dark" | "light";
-  onToggleTheme?: () => void;
-  scrollToTop?: () => void;
-}) {
+export function Header({ theme, onToggleTheme }: { theme: "dark" | "light"; onToggleTheme: () => void }) {
   return (
-    <header className="gov-header">
-      <div className="gov-header-inner">
-        <div className="gov-brand" onClick={scrollToTop} title="Click to return to top">
-          <span className="gov-brand-icon">
-            <Building2 size={18} />
+    <header className="sticky top-0 z-[500] border-b border-border bg-background/85 backdrop-blur">
+      <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6">
+        <div className="flex size-9 items-center justify-center rounded-xl bg-foreground/90">
+          <span className="lane-mark block h-1 w-5 rounded-full" />
+        </div>
+        <div className="mr-auto">
+          <p className="font-display text-lg leading-none font-semibold">UrbanSense</p>
+          <p className="text-xs text-muted-foreground">Road condition monitoring</p>
+        </div>
+        <span className="hidden items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground sm:inline-flex">
+          <span className="relative flex size-2">
+            <span className="absolute inline-flex size-2 animate-ping rounded-full bg-verified opacity-75" />
+            <span className="relative inline-flex size-2 rounded-full bg-verified" />
           </span>
-          <div className="gov-brand-titles">
-            <span className="brand-main">UrbanSense</span>
-            <span className="brand-sub">Municipal Road Condition Monitoring System</span>
-          </div>
-        </div>
-
-        <div className="gov-header-right">
-          <div className="system-status-indicator">
-            <span className="status-dot-green" />
-            <span>System Status: Operational</span>
-          </div>
-          <span className="header-divider-v" />
-          <span className="prototype-tag">SIH 2026 Prototype</span>
-          <span className="header-divider-v" />
-          <nav className="header-nav-links">
-            <button type="button" className="nav-link-gov">Help</button>
-            <button type="button" className="nav-link-gov">Accessibility</button>
-            <button type="button" className="nav-link-gov">EN</button>
-          </nav>
-        </div>
+          System operational
+        </span>
+        <button
+          onClick={onToggleTheme}
+          aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          className="inline-flex size-9 items-center justify-center rounded-xl border border-border bg-card text-foreground transition-colors hover:bg-accent"
+        >
+          {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+        </button>
       </div>
     </header>
   );

@@ -1,100 +1,461 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity,
-  ArrowRight,
+  ArrowDown,
   ArrowUp,
-  Building2,
-  Check,
-  ChevronRight,
-  Clock,
+  CheckCircle2,
   Crosshair,
-  Eye,
-  FileSpreadsheet,
   FileVideo,
-  Loader2,
   MapPin,
-  Maximize2,
-  Minimize2,
-  Navigation,
-  Play,
-  Radio,
+  Moon,
+  Route,
   Search,
-  Upload,
-  X,
+  ShieldCheck,
+  Sun,
+  UploadCloud,
 } from "lucide-react";
 import { ClientOnly } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { apiBaseUrl, toDashboardIncident, useLiveIncidents } from "@/lib/incident-api";
 import type { Incident } from "@/types/incident";
 import potholeEvidenceImg from "@/assets/pothole-evidence.jpg";
+import { cn } from "@/lib/utils";
 
 const IncidentMap = lazy(() => import("@/map/IncidentMap"));
-type FilterValue = "All incidents" | "Verified" | "Under review" | "Resolved";
-type LocationMode = "search" | "device";
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+type FilterKey = "all" | "verified" | "review" | "resolved" | "high";
+
+const filters: { key: FilterKey; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "verified", label: "Verified" },
+  { key: "review", label: "Under review" },
+  { key: "resolved", label: "Resolved" },
+  { key: "high", label: "High priority" },
+];
+
+function Header({ theme, onToggleTheme }: { theme: "dark" | "light"; onToggleTheme: () => void }) {
+  return (
+    <header className="sticky top-0 z-[500] border-b border-border bg-background/85 backdrop-blur">
+      <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6">
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="flex size-9 items-center justify-center rounded-xl bg-foreground/90 transition-transform hover:scale-105"
+          title="UrbanSense Home - Scroll to top"
+        >
+          <span className="lane-mark block h-1 w-5 rounded-full" />
+        </button>
+        <div className="mr-auto cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+          <p className="font-display text-lg leading-none font-semibold">UrbanSense</p>
+          <p className="text-xs text-muted-foreground">Road condition monitoring</p>
+        </div>
+        <span className="hidden items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground sm:inline-flex">
+          <span className="relative flex size-2">
+            <span className="absolute inline-flex size-2 animate-ping rounded-full bg-emerald-500 opacity-75" />
+            <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+          </span>
+          System operational
+        </span>
+        <button
+          onClick={onToggleTheme}
+          aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          className="inline-flex size-9 items-center justify-center rounded-xl border border-border bg-card text-foreground transition-colors hover:bg-accent"
+        >
+          {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+        </button>
+      </div>
+    </header>
+  );
 }
 
-function HowItWorksExplainer() {
+function useCountUp(target: number) {
+  const [value, setValue] = useState(0);
+  const raf = useRef<number | null>(null);
+  useEffect(() => {
+    const start = performance.now();
+    const from = 0;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / 700);
+      setValue(Math.round(from + (target - from) * (1 - Math.pow(1 - t, 3))));
+      if (t < 1) raf.current = requestAnimationFrame(tick);
+    };
+    raf.current = requestAnimationFrame(tick);
+    return () => {
+      if (raf.current) cancelAnimationFrame(raf.current);
+    };
+  }, [target]);
+  return value;
+}
+
+function StatCard({
+  label,
+  value,
+  active,
+  tone,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  active: boolean;
+  tone: string;
+  onClick: () => void;
+}) {
+  const shown = useCountUp(value);
   return (
-    <section className="gov-card explainer-card">
-      <div className="explainer-header">
-        <h3>How UrbanSense Works</h3>
-        <p>Road footage is analysed to detect potholes, associate their location and create incidents for review.</p>
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "rounded-2xl border bg-card p-4 text-left transition-colors hover:bg-accent/40",
+        active ? "border-primary shadow-sm" : "border-border",
+      )}
+    >
+      <span className={cn("mb-2 block h-1 w-8 rounded-full", tone)} />
+      <p className="font-display text-3xl font-semibold tabular-nums">{shown}</p>
+      <p className="mt-1 text-xs leading-snug text-muted-foreground">{label}</p>
+    </button>
+  );
+}
+
+function StatCards({
+  counts,
+  filter,
+  onFilter,
+}: {
+  counts: { all: number; verified: number; review: number; high: number };
+  filter: FilterKey;
+  onFilter: (f: FilterKey) => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <StatCard
+        label="Incidents reported"
+        value={counts.all}
+        tone="bg-amber-500"
+        active={filter === "all"}
+        onClick={() => onFilter("all")}
+      />
+      <StatCard
+        label="Confirmed by multiple sightings"
+        value={counts.verified}
+        tone="bg-emerald-500"
+        active={filter === "verified"}
+        onClick={() => onFilter("verified")}
+      />
+      <StatCard
+        label="Waiting for review"
+        value={counts.review}
+        tone="bg-amber-400"
+        active={filter === "review"}
+        onClick={() => onFilter("review")}
+      />
+      <StatCard
+        label="High priority, 90%+ confidence"
+        value={counts.high}
+        tone="bg-rose-500"
+        active={filter === "high"}
+        onClick={() => onFilter("high")}
+      />
+    </div>
+  );
+}
+
+function IncidentPanel({
+  incident,
+  onStatusChange,
+}: {
+  incident: Incident | null;
+  onStatusChange: (id: string, newStatus: "Verified" | "Resolved") => void;
+}) {
+  if (!incident) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">
+        Select a marker on the map or an incident row below to view full details.
+      </div>
+    );
+  }
+
+  const isVerified = incident.status === "Verified";
+  const isResolved = incident.status === "Resolved";
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <span
+          className={cn(
+            "rounded-full px-2.5 py-0.5 text-xs font-semibold",
+            isVerified && "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+            isResolved && "bg-slate-500/15 text-slate-600 dark:text-slate-400",
+            !isVerified && !isResolved && "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+          )}
+        >
+          {incident.status}
+        </span>
+        <span className="font-mono text-xs text-muted-foreground">{incident.id}</span>
       </div>
 
-      <div className="explainer-stages">
-        {/* Stage 1 */}
-        <div className="stage-item">
-          <div className="stage-badge">1</div>
-          <div className="stage-media">
-            <img src={potholeEvidenceImg} alt="Sample road footage" />
-            <span className="stage-overlay-tag">Input Video</span>
-          </div>
-          <div className="stage-info">
-            <h4>Road Footage</h4>
-            <p>Road video is submitted for analysis.</p>
-          </div>
+      <div className="relative mt-3 overflow-hidden rounded-xl border border-border">
+        <img
+          src={incident.representativeImage || potholeEvidenceImg}
+          alt={`Detection frame for ${incident.id}`}
+          className="aspect-video w-full object-cover"
+        />
+        <span className="absolute top-[54%] left-[44%] h-[16%] w-[22%] rounded-md border-2 border-rose-500 shadow-md" />
+        <span className="absolute top-[44%] left-[44%] rounded bg-rose-600 px-1.5 py-0.5 font-mono text-[10px] font-bold text-white shadow">
+          Pothole {incident.confidence}%
+        </span>
+      </div>
+
+      <h3 className="mt-3 text-base font-semibold text-foreground">{incident.area}</h3>
+      {incident.roadSegment && (
+        <p className="text-xs text-muted-foreground">{incident.roadSegment}</p>
+      )}
+
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm border-t border-border pt-3">
+        <div>
+          <dt className="text-xs text-muted-foreground">Confidence</dt>
+          <dd className="font-semibold text-foreground">{incident.confidence}%</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">Sightings</dt>
+          <dd className="font-semibold text-foreground">{incident.sightingCount}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">Coordinates</dt>
+          <dd className="font-mono text-xs">
+            {incident.latitude.toFixed(4)}, {incident.longitude.toFixed(4)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">First detected</dt>
+          <dd className="text-xs">{incident.firstSeen}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">Last seen</dt>
+          <dd className="text-xs">{incident.lastSeen}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">Frame</dt>
+          <dd className="font-mono text-xs">Frame {incident.frame || 412}</dd>
+        </div>
+      </dl>
+
+      <div className="mt-4 flex flex-wrap gap-2 pt-2 border-t border-border">
+        <Button
+          variant="outline"
+          size="sm"
+          className="rounded-xl flex-1"
+          disabled={isVerified}
+          onClick={() => onStatusChange(incident.id, "Verified")}
+        >
+          <ShieldCheck className="mr-1.5 size-4" /> Mark verified
+        </Button>
+        <Button
+          size="sm"
+          className="rounded-xl flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+          disabled={isResolved}
+          onClick={() => onStatusChange(incident.id, "Resolved")}
+        >
+          <CheckCircle2 className="mr-1.5 size-4" /> Mark resolved
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function UploadLab({ onVideoProcessed }: { onVideoProcessed: (incidents: Incident[]) => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [gpsFile, setGpsFile] = useState<File | null>(null);
+  const [locationText, setLocationText] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progressMsg, setProgressMsg] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const requestDeviceLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocationText(`${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`);
+      },
+      () => {
+        setLocationText("28.6139, 77.2090");
+      },
+      { timeout: 5000 }
+    );
+  };
+
+  const handleProcess = async () => {
+    if (!file) {
+      alert("Please select a road video file first.");
+      return;
+    }
+    setIsProcessing(true);
+    setProgressMsg("Uploading road video to YOLOv8 inference worker...");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      if (locationText.trim()) {
+        formData.append("user_location", locationText.trim());
+      }
+      if (gpsFile) {
+        formData.append("gps_file", gpsFile);
+      }
+
+      const res = await fetch(`${apiBaseUrl}/api/videos/upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error(`Upload failed with status ${res.status}`);
+      }
+
+      const data = await res.json();
+      const rawIncidents = data.fused_incidents || [];
+      const dashIncidents = rawIncidents.map(toDashboardIncident);
+
+      onVideoProcessed(dashIncidents);
+      setProgressMsg(`Analysis complete! Processed ${dashIncidents.length} incidents.`);
+    } catch (err) {
+      console.error("Video processing error:", err);
+      alert("Video processing failed. Please check backend connection.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <section className="grid gap-4 rounded-2xl border border-border bg-card p-4 sm:p-6 lg:grid-cols-2 shadow-sm">
+      <div>
+        <h2 className="text-xl font-semibold">Analyse road footage</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Upload a dashcam clip. Detections are geotagged and added to the log.
+        </p>
+
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            const f = e.dataTransfer.files?.[0];
+            if (f) setFile(f);
+          }}
+          className={cn(
+            "mt-4 rounded-2xl border-2 border-dashed p-6 text-center transition-colors cursor-pointer",
+            dragOver ? "border-primary bg-accent/50" : "border-border hover:border-primary/50",
+          )}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <UploadCloud className="mx-auto size-8 text-muted-foreground" />
+          <p className="mt-2 text-sm font-medium">
+            {file ? file.name : "Drop a video here, or choose a file"}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">MP4, AVI, MOV or WEBM</p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".mp4,.avi,.mov,.webm"
+            className="sr-only"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-3 rounded-xl pointer-events-none"
+          >
+            <FileVideo className="mr-1.5 size-4" /> Choose file
+          </Button>
         </div>
 
-        <div className="stage-arrow">
-          <ArrowRight size={20} />
-        </div>
-
-        {/* Stage 2 */}
-        <div className="stage-item">
-          <div className="stage-badge">2</div>
-          <div className="stage-media">
-            <img src={potholeEvidenceImg} alt="YOLOv8 pothole detection" />
-            <div className="stage-bounding-box" style={{ top: '35%', left: '30%', width: '40%', height: '35%' }}>
-              <span className="bbox-label">Pothole (87%)</span>
+        <div className="mt-4 space-y-2">
+          <label htmlFor="location" className="text-sm font-medium">
+            Location
+          </label>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <MapPin className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="location"
+                value={locationText}
+                onChange={(e) => setLocationText(e.target.value)}
+                placeholder="Enter city, road or coordinates"
+                className="rounded-xl pl-9"
+              />
             </div>
-          </div>
-          <div className="stage-info">
-            <h4>Pothole Detection</h4>
-            <p>YOLOv8 identifies and tracks potholes in the footage.</p>
+            <Button type="button" variant="outline" className="rounded-xl" onClick={requestDeviceLocation}>
+              <Crosshair className="mr-1.5 size-4" /> Use my location
+            </Button>
           </div>
         </div>
 
-        <div className="stage-arrow">
-          <ArrowRight size={20} />
+        <label className="mt-4 flex cursor-pointer items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-accent/40">
+          <Route className="size-4" />
+          <span className="truncate">{gpsFile ? gpsFile.name : "Add a GPS track (optional)"}</span>
+          <input
+            type="file"
+            accept=".gpx,.csv,.json"
+            className="sr-only"
+            onChange={(e) => setGpsFile(e.target.files?.[0] ?? null)}
+          />
+        </label>
+
+        <Button
+          type="button"
+          className="mt-4 w-full rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
+          onClick={handleProcess}
+          disabled={isProcessing}
+        >
+          {isProcessing ? progressMsg || "Processing video..." : "Process video"}
+        </Button>
+      </div>
+
+      <div>
+        <div className="relative aspect-video overflow-hidden rounded-2xl border border-border bg-slate-900 flex items-center justify-center">
+          <img
+            src={potholeEvidenceImg}
+            alt="Sample preview"
+            className="w-full h-full object-cover opacity-80"
+          />
+          {isProcessing && <div className="scan-line absolute inset-x-0 top-0 h-6" />}
+          <div className="absolute top-[45%] left-[38%] h-[26%] w-[26%] rounded-md border-2 border-rose-500">
+            <span className="absolute -top-6 left-0 rounded bg-rose-600 px-1.5 py-0.5 font-mono text-[10px] font-bold text-white shadow">
+              Pothole 96%
+            </span>
+          </div>
+          <span className="absolute bottom-3 left-3 font-mono text-[10px] text-white/70 bg-black/60 px-2 py-0.5 rounded backdrop-blur">
+            YOLOv8n + ByteTrack · 30 FPS
+          </span>
         </div>
 
-        {/* Stage 3 */}
-        <div className="stage-item">
-          <div className="stage-badge">3</div>
-          <div className="stage-media stage-map-preview">
-            <div className="mini-map-visual">
-              <MapPin size={24} className="text-gov-red animate-bounce" />
-              <span className="map-pin-tag">Incident Logged</span>
+        <div className="mt-4 rounded-xl border border-border bg-card p-4 text-xs space-y-2">
+          <h4 className="font-semibold text-sm">Processing Pipeline</h4>
+          <div className="grid grid-cols-4 gap-2 text-center text-[11px]">
+            <div className="rounded bg-accent/60 p-2">
+              <span className="block font-bold">1. Footage</span>
+              <span className="text-muted-foreground">Video Intake</span>
             </div>
-          </div>
-          <div className="stage-info">
-            <h4>Incident Location</h4>
-            <p>Detected incidents are associated with a location and displayed on the incident map.</p>
+            <div className="rounded bg-accent/60 p-2">
+              <span className="block font-bold">2. Detection</span>
+              <span className="text-muted-foreground">YOLOv8 Inference</span>
+            </div>
+            <div className="rounded bg-accent/60 p-2">
+              <span className="block font-bold">3. Fusion</span>
+              <span className="text-muted-foreground">Kafka Stream</span>
+            </div>
+            <div className="rounded bg-accent/60 p-2">
+              <span className="block font-bold">4. Review</span>
+              <span className="text-muted-foreground">Geotagged Log</span>
+            </div>
           </div>
         </div>
       </div>
@@ -102,827 +463,233 @@ function HowItWorksExplainer() {
   );
 }
 
-function VideoUploadCard({ onVideoProcessed }: { onVideoProcessed?: (incidents: any[]) => void }) {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [gpsFile, setGpsFile] = useState<File | null>(null);
-
-  // Location mode state
-  const [locationMode, setLocationMode] = useState<LocationMode>("search");
-  const [searchQuery, setSearchQuery] = useState("Khan Market, New Delhi");
-  const [geocodedLocation, setGeocodedLocation] = useState<{ lat: number; lon: number; name: string } | null>({
-    lat: 28.6003,
-    lon: 77.2270,
-    name: "Khan Market, New Delhi",
-  });
-  const [isGeocoding, setIsGeocoding] = useState(false);
-
-  // Device location state
-  const [deviceLocation, setDeviceLocation] = useState<{ lat: number; lon: number; accuracy?: number; placeName: string } | null>(null);
-  const [deviceLocStatus, setDeviceLocStatus] = useState<"idle" | "requesting" | "success" | "error">("idle");
-
-  // Processing state
-  const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "completed" | "failed">("idle");
-  const [message, setMessage] = useState<string | null>(null);
-  const [stats, setStats] = useState<{ frames?: number; sightings?: number; events?: number } | null>(null);
-
-  const videoInputRef = useRef<HTMLInputElement>(null);
-  const gpsInputRef = useRef<HTMLInputElement>(null);
-
-  // Perform geocoding lookup for place search query
-  const geocodePlaceSearch = async (queryStr: string) => {
-    if (!queryStr.trim()) return;
-    setIsGeocoding(true);
-
-    try {
-      const coordMatch = queryStr.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
-      if (coordMatch) {
-        const lat = parseFloat(coordMatch[1]);
-        const lon = parseFloat(coordMatch[2]);
-        if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
-          setGeocodedLocation({ lat, lon, name: `Coordinates (${lat.toFixed(4)}, ${lon.toFixed(4)})` });
-          setIsGeocoding(false);
-          return;
-        }
-      }
-
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryStr)}&limit=1`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.length > 0) {
-          const lat = parseFloat(data[0].lat);
-          const lon = parseFloat(data[0].lon);
-          const displayName = data[0].display_name.split(",").slice(0, 3).join(",");
-          setGeocodedLocation({ lat, lon, name: displayName });
-          setIsGeocoding(false);
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn("Geocoding lookup error:", err);
-    }
-
-    setGeocodedLocation({ lat: 28.6003, lon: 77.2270, name: `${queryStr} (Location set)` });
-    setIsGeocoding(false);
-  };
+export default function Dashboard() {
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const { incidents: initialIncidents, loading, error, addIncidents } = useLiveIncidents();
+  const [incidentsList, setIncidentsList] = useState<Incident[]>([]);
+  const [filter, setFilter] = useState<FilterKey>("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortKey, setSortKey] = useState<"id" | "area" | "confidence" | "sightingCount" | "status" | "lastSeen">("lastSeen");
+  const [sortDir, setSortDir] = useState<1 | -1>(-1);
 
   useEffect(() => {
-    if (locationMode !== "search") return;
-    const timer = setTimeout(() => {
-      geocodePlaceSearch(searchQuery);
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [searchQuery, locationMode]);
-
-  const activeLocation = useMemo(() => {
-    if (locationMode === "device" && deviceLocation) {
-      return { lat: deviceLocation.lat, lon: deviceLocation.lon, name: deviceLocation.placeName, valid: true };
+    if (initialIncidents && initialIncidents.length > 0) {
+      setIncidentsList(initialIncidents);
+      if (!selectedId) setSelectedId(initialIncidents[0].id);
     }
-    if (geocodedLocation) {
-      return { lat: geocodedLocation.lat, lon: geocodedLocation.lon, name: geocodedLocation.name, valid: true };
-    }
-    return { lat: 28.6003, lon: 77.2270, name: "Khan Market, New Delhi", valid: true };
-  }, [locationMode, deviceLocation, geocodedLocation]);
+  }, [initialIncidents]);
 
-  const requestDeviceLocation = () => {
-    if (typeof window === "undefined" || !navigator.geolocation) {
-      setDeviceLocation({ lat: 28.6003, lon: 77.2270, accuracy: 25, placeName: "Khan Market, New Delhi" });
-      setDeviceLocStatus("success");
-      return;
-    }
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+  }, [theme]);
 
-    setDeviceLocStatus("requesting");
+  const visibleIncidents = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return incidentsList
+      .filter((i) => {
+        const matchesQuery = !q || i.id.toLowerCase().includes(q) || i.area.toLowerCase().includes(q) || i.roadSegment.toLowerCase().includes(q);
+        if (!matchesQuery) return false;
+        if (filter === "all") return true;
+        if (filter === "verified") return i.status === "Verified";
+        if (filter === "review") return i.status === "Under review";
+        if (filter === "resolved") return i.status === "Resolved";
+        if (filter === "high") return i.confidence >= 90 && i.status !== "Resolved";
+        return true;
+      })
+      .sort((a, b) => {
+        const av = a[sortKey];
+        const bv = b[sortKey];
+        if (typeof av === "number" && typeof bv === "number") return (av - bv) * sortDir;
+        return String(av).localeCompare(String(bv)) * sortDir;
+      });
+  }, [incidentsList, filter, searchQuery, sortKey, sortDir]);
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const lat = Math.round(position.coords.latitude * 10000) / 10000;
-        const lon = Math.round(position.coords.longitude * 10000) / 10000;
-        const acc = position.coords.accuracy ? Math.round(position.coords.accuracy) : undefined;
-        setDeviceLocation({ lat, lon, accuracy: acc, placeName: "Current Device Location" });
-        setDeviceLocStatus("success");
-      },
-      () => {
-        setDeviceLocation({ lat: 28.6003, lon: 77.2270, accuracy: 50, placeName: "Municipal Location Center" });
-        setDeviceLocStatus("success");
-      },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
+  const counts = useMemo(
+    () => ({
+      all: incidentsList.length,
+      verified: incidentsList.filter((i) => i.status === "Verified").length,
+      review: incidentsList.filter((i) => i.status === "Under review").length,
+      high: incidentsList.filter((i) => i.confidence >= 90 && i.status !== "Resolved").length,
+    }),
+    [incidentsList],
+  );
+
+  const selectedIncident = useMemo(
+    () => incidentsList.find((i) => i.id === selectedId) || visibleIncidents[0] || null,
+    [incidentsList, selectedId, visibleIncidents],
+  );
+
+  const handleStatusChange = (id: string, newStatus: "Verified" | "Resolved") => {
+    setIncidentsList((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
     );
   };
 
-  const handleUploadAndProcess = async () => {
-    if (!selectedFile) return;
-
-    setStatus("uploading");
-    setMessage("Uploading road footage to inspection server...");
-    setStats(null);
-
-    try {
-      const formData = new FormData();
-      formData.append("video", selectedFile);
-      if (gpsFile) {
-        formData.append("gps", gpsFile);
-      }
-
-      if (activeLocation.valid) {
-        formData.append("latitude", activeLocation.lat.toString());
-        formData.append("longitude", activeLocation.lon.toString());
-      }
-
-      setStatus("processing");
-      setMessage("Running YOLOv8 & ByteTrack pothole detection pipeline...");
-
-      const response = await fetch(`${apiBaseUrl}/videos/upload`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => null);
-        throw new Error(errData?.detail || `Server responded with status ${response.status}`);
-      }
-
-      const result = await response.json();
-      setStatus("completed");
-      setMessage(result.message || "Incident mapped for road maintenance review.");
-      setStats({
-        frames: result.total_frames,
-        sightings: result.potholes_detected,
-        events: result.events_generated,
-      });
-
-      if (onVideoProcessed && Array.isArray(result.incidents)) {
-        onVideoProcessed(result.incidents);
-      }
-    } catch (err: any) {
-      console.error("Video processing failed:", err);
-      setStatus("failed");
-      setMessage(err.message || "Video analysis failed. Please retry.");
+  const handleVideoProcessed = (newIncidents: Incident[]) => {
+    if (newIncidents.length > 0) {
+      addIncidents(newIncidents);
+      setIncidentsList((prev) => [...newIncidents, ...prev]);
+      setSelectedId(newIncidents[0].id);
     }
   };
 
   return (
-    <div className="gov-card upload-portal-card">
-      <div className="gov-card-header">
-        <div>
-          <h3>Road Video Analysis</h3>
-          <p className="gov-card-subtitle">
-            Upload road footage for pothole detection and geographic incident mapping.
-          </p>
-        </div>
-      </div>
+    <div className="min-h-screen bg-background text-foreground transition-colors duration-200">
+      <Header theme={theme} onToggleTheme={() => setTheme(theme === "dark" ? "light" : "dark")} />
 
-      <div className="gov-card-body">
-        {/* Step 1: Select Road Video */}
-        <div className="form-group">
-          <label className="form-label">
-            <span className="form-step">1</span> Select Road Video
-          </label>
-          <div
-            className={`gov-file-dropzone ${selectedFile ? "active" : ""}`}
-            onClick={() => videoInputRef.current?.click()}
-          >
-            <input
-              ref={videoInputRef}
-              type="file"
-              accept="video/mp4,video/avi,video/quicktime,video/x-matroska,video/webm"
-              style={{ display: "none" }}
-              onChange={(e) => {
-                if (e.target.files && e.target.files[0]) {
-                  setSelectedFile(e.target.files[0]);
-                  setStatus("idle");
-                  setMessage(null);
-                }
-              }}
-            />
-            {selectedFile ? (
-              <div className="selected-file-row">
-                <FileVideo size={20} className="text-gov-green" />
-                <div className="file-details">
-                  <span className="file-name">{selectedFile.name}</span>
-                  <span className="file-meta">{formatFileSize(selectedFile.size)}</span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="file-remove-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedFile(null);
-                    if (videoInputRef.current) videoInputRef.current.value = "";
-                  }}
-                >
-                  <X size={14} /> Remove
-                </Button>
-              </div>
-            ) : (
-              <div className="dropzone-text-group">
-                <Upload size={22} className="text-gov-subtle" />
-                <div>
-                  <strong>Click to choose video file</strong> (MP4, AVI, MOV, WEBM)
-                  <p>Upload road inspection video file</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Step 2: Video Location */}
-        <div className="form-group">
-          <label className="form-label">
-            <span className="form-step">2</span> Video Location
-          </label>
-          <p className="form-help-text">Select the location associated with this road footage.</p>
-
-          <div className="location-radio-group">
-            <label className="gov-radio-label">
-              <input
-                type="radio"
-                name="locMode"
-                checked={locationMode === "search"}
-                onChange={() => setLocationMode("search")}
-              />
-              <span>Enter location manually</span>
-            </label>
-
-            <label className="gov-radio-label">
-              <input
-                type="radio"
-                name="locMode"
-                checked={locationMode === "device"}
-                onChange={() => {
-                  setLocationMode("device");
-                  if (!deviceLocation) requestDeviceLocation();
-                }}
-              />
-              <span>Use my current device location</span>
-            </label>
-          </div>
-
-          {locationMode === "search" && (
-            <div className="location-input-subgroup">
-              <div className="search-field-gov">
-                <Search size={15} className="search-icon-gov" />
-                <input
-                  type="text"
-                  className="gov-input"
-                  placeholder="Search address, locality or coordinates..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
+        <section className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
+          <div className="relative h-[460px] overflow-hidden rounded-3xl border border-border shadow-sm lg:h-[620px]">
+            <ClientOnly fallback={<div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading GIS Map...</div>}>
+              <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading GIS Map...</div>}>
+                <IncidentMap
+                  incidents={visibleIncidents}
+                  selected={selectedIncident || undefined}
+                  onSelect={(id) => setSelectedId(id)}
                 />
-                {isGeocoding && <Loader2 size={15} className="animate-spin clear-icon-gov" />}
-              </div>
+              </Suspense>
+            </ClientOnly>
+
+            {/* Floating Top-Left Header Banner */}
+            <div className="pointer-events-none absolute top-4 left-4 z-[400] max-w-md rounded-2xl bg-background/90 p-4 shadow-lg backdrop-blur sm:top-6 sm:left-6 sm:p-5 border border-border">
+              <h1 className="text-2xl leading-tight font-semibold sm:text-3xl text-foreground">
+                Every pothole, on the map.
+              </h1>
+              <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
+                Footage in, geotagged incidents out — so crews fix the worst roads first.
+              </p>
             </div>
-          )}
 
-          {locationMode === "device" && (
-            <div className="location-device-subgroup">
-              {deviceLocStatus === "requesting" ? (
-                <div className="device-loc-banner loading">
-                  <Loader2 size={16} className="animate-spin" />
-                  <span>Retrieving device GPS coordinates...</span>
-                </div>
-              ) : (
-                <div className="device-loc-banner success">
-                  <Navigation size={16} />
-                  <div>
-                    <strong>{deviceLocation?.placeName || "Device Location"}</strong>
-                    <span>Lat: {activeLocation.lat.toFixed(4)} | Lon: {activeLocation.lon.toFixed(4)}</span>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={requestDeviceLocation} className="btn-secondary-gov">
-                    Re-locate
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="location-confirmed-bar">
-            <MapPin size={14} className="text-gov-green" />
-            <span>
-              Selected Location: <strong>{activeLocation.name}</strong> (Coordinates: {activeLocation.lat.toFixed(4)}, {activeLocation.lon.toFixed(4)})
-            </span>
-          </div>
-        </div>
-
-        {/* Step 3: GPS Track (Optional) */}
-        <div className="form-group form-group-optional">
-          <div className="optional-title-row">
-            <span className="optional-tag">Optional</span>
-            <span>GPS Track (Optional)</span>
-          </div>
-          <p className="form-help-text">Upload a GPS track when location data is available with the road footage.</p>
-          <input
-            ref={gpsInputRef}
-            type="file"
-            accept=".csv,.gpx"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              if (e.target.files && e.target.files[0]) {
-                setGpsFile(e.target.files[0]);
-              }
-            }}
-          />
-          {gpsFile ? (
-            <div className="gps-file-badge">
-              <FileSpreadsheet size={14} />
-              <span>{gpsFile.name}</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setGpsFile(null);
-                  if (gpsInputRef.current) gpsInputRef.current.value = "";
-                }}
-              >
-                <X size={12} />
-              </button>
-            </div>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="btn-tertiary-gov"
-              onClick={() => gpsInputRef.current?.click()}
-            >
-              <FileSpreadsheet size={13} /> Upload GPS Track
-            </Button>
-          )}
-        </div>
-
-        {/* Primary Action Button */}
-        <div className="form-action-row">
-          <Button
-            className="btn-primary-gov btn-strong-primary"
-            disabled={!selectedFile || status === "uploading" || status === "processing"}
-            onClick={handleUploadAndProcess}
-          >
-            {status === "uploading" || status === "processing" ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                <span>Processing Video...</span>
-              </>
-            ) : (
-              <>
-                <Play size={16} fill="currentColor" />
-                <span>Process Video</span>
-              </>
-            )}
-          </Button>
-
-          {message && (
-            <div className={`gov-alert alert-${status}`}>
-              {status === "completed" && <Check size={15} />}
-              {status === "failed" && <X size={15} />}
-              {(status === "uploading" || status === "processing") && <Loader2 size={15} className="animate-spin" />}
-              <span>{message}</span>
-            </div>
-          )}
-
-          {stats && (
-            <div className="admin-stats-summary">
-              <div className="stat-box">
-                <span className="stat-num">{stats.frames}</span>
-                <span className="stat-lbl">Frames Analyzed</span>
-              </div>
-              <div className="stat-box highlight">
-                <span className="stat-num">{stats.sightings}</span>
-                <span className="stat-lbl">Potholes Detected</span>
-              </div>
-              <div className="stat-box">
-                <span className="stat-num">{stats.events}</span>
-                <span className="stat-lbl">Events Logged</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function IncidentPanel({
-  incident,
-  onClose,
-}: {
-  incident: Incident | undefined;
-  onClose: () => void;
-}) {
-  if (!incident)
-    return (
-      <div className="detail-empty-gov">
-        <Crosshair size={28} className="text-gov-subtle" />
-        <h4>Select an Incident Record</h4>
-        <p>Click on any map marker or list entry to inspect detailed incident record data.</p>
-      </div>
-    );
-
-  return (
-    <div className="detail-record-wrap" key={incident.id}>
-      <div className="detail-record-header">
-        <div>
-          <span className="detail-record-eyebrow">INCIDENT RECORD</span>
-          <h3>{incident.id}</h3>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label="Close details"
-          onClick={onClose}
-          className="btn-icon-gov"
-        >
-          <X size={15} />
-        </Button>
-      </div>
-
-      <div className="detail-status-banner">
-        <span className={`gov-status-pill pill-${incident.status.toLowerCase().replace(" ", "-")}`}>
-          {incident.status === "Verified" && <Check size={12} />}
-          {incident.status}
-        </span>
-        <span className="record-area-name">{incident.area}</span>
-      </div>
-
-      {incident.image ? (
-        <div className="evidence-frame-box">
-          <img
-            src={incident.image}
-            alt="Representative detection frame"
-            loading="lazy"
-            width={1024}
-            height={768}
-          />
-          <span className="evidence-label">DETECTION FRAME EVIDENCE</span>
-        </div>
-      ) : (
-        <div className="no-evidence-box">
-          <Eye size={16} /> No evidence frame image attached
-        </div>
-      )}
-
-      <div className="record-grid">
-        <div className="record-field">
-          <span className="field-name">Incident ID</span>
-          <span className="field-value font-mono">{incident.id}</span>
-        </div>
-
-        <div className="record-field">
-          <span className="field-name">Type</span>
-          <span className="field-value">Pothole Hazard</span>
-        </div>
-
-        <div className="record-field">
-          <span className="field-name">Status</span>
-          <span className="field-value">{incident.status}</span>
-        </div>
-
-        <div className="record-field">
-          <span className="field-name">Road Segment</span>
-          <span className="field-value">{incident.roadSegment}</span>
-        </div>
-
-        <div className="record-field">
-          <span className="field-name">Coordinates</span>
-          <span className="field-value font-mono">
-            {incident.latitude.toFixed(4)}, {incident.longitude.toFixed(4)}
-          </span>
-        </div>
-
-        <div className="record-field">
-          <span className="field-name">Detector Confidence</span>
-          <span className="field-value">{incident.detectorConfidence ?? incident.confidence}%</span>
-        </div>
-
-        <div className="record-field">
-          <span className="field-name">Incident Confidence</span>
-          <span className="field-value text-gov-green font-bold">{incident.confidence}%</span>
-        </div>
-
-        <div className="record-field">
-          <span className="field-name">Sightings</span>
-          <span className="field-value">{incident.sightingCount}</span>
-        </div>
-
-        <div className="record-field">
-          <span className="field-name">First Detected</span>
-          <span className="field-value">{incident.firstSeen}</span>
-        </div>
-
-        <div className="record-field">
-          <span className="field-name">Last Detected</span>
-          <span className="field-value">{incident.lastSeen}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function Dashboard() {
-  const { incidents, addIncidents } = useLiveIncidents();
-  const [selectedId, setSelectedId] = useState<string | null>(() => incidents[0]?.id ?? null);
-  const [filter, setFilter] = useState<FilterValue>("All incidents");
-  const [query, setQuery] = useState("");
-  const [isMapExpanded, setIsMapExpanded] = useState(false);
-  const selected = incidents.find((item) => item.id === selectedId);
-
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const filtered = useMemo(
-    () =>
-      incidents.filter(
-        (item) =>
-          (filter === "All incidents" || item.status === filter) &&
-          `${item.id} ${item.area} ${item.roadSegment}`.toLowerCase().includes(query.toLowerCase()),
-      ),
-    [filter, incidents, query],
-  );
-
-  const verifiedCount = incidents.filter((item) => item.status === "Verified").length;
-  const pendingCount = incidents.filter((item) => item.status === "Under review").length;
-  const highPriorityCount = incidents.filter(
-    (item) => item.confidence >= 90 && item.status !== "Resolved",
-  ).length;
-
-  return (
-    <div className="gov-app">
-      {/* Header */}
-      <header className="gov-header">
-        <div className="gov-header-inner">
-          <div className="gov-brand" onClick={scrollToTop} title="Click to scroll to top">
-            <span className="gov-brand-icon">
-              <Building2 size={18} />
-            </span>
-            <div className="gov-brand-titles">
-              <span className="brand-main">UrbanSense</span>
-              <span className="brand-sub">Municipal Road Condition Monitoring System</span>
-            </div>
-          </div>
-
-          <div className="gov-header-right">
-            <div className="system-status-indicator">
-              <span className="status-dot-green" />
-              <span>System Status: Operational</span>
-            </div>
-            <span className="header-divider-v" />
-            <span className="prototype-tag">SIH 2026 Prototype</span>
-            <span className="header-divider-v" />
-            <nav className="header-nav-links">
-              <button type="button" className="nav-link-gov">Help</button>
-              <button type="button" className="nav-link-gov">Accessibility</button>
-              <button type="button" className="nav-link-gov">EN</button>
-            </nav>
-          </div>
-        </div>
-      </header>
-
-      <div className="gov-container">
-        {/* Breadcrumb */}
-        <nav className="gov-breadcrumb" aria-label="Breadcrumb">
-          <span>Home</span>
-          <ChevronRight size={13} />
-          <span className="current">Road Monitoring</span>
-        </nav>
-
-        {/* Operational Page Title */}
-        <div className="gov-page-heading">
-          <h2>Road Condition Monitoring</h2>
-          <p>Monitor pothole detections, verify road incidents and view their geographic distribution.</p>
-        </div>
-
-        {/* How UrbanSense Works 3-Stage Explainer */}
-        <HowItWorksExplainer />
-
-        {/* Summary Metric Cards */}
-        <div className="gov-metrics-grid">
-          <div className="gov-metric-card">
-            <span className="metric-label">TOTAL REPORTED INCIDENTS</span>
-            <div className="metric-num-row">
-              <span className="metric-number">{incidents.length}</span>
-              <span className="metric-subtext">Active Database</span>
-            </div>
-          </div>
-
-          <div className="gov-metric-card">
-            <span className="metric-label">VERIFIED INCIDENTS</span>
-            <div className="metric-num-row">
-              <span className="metric-number text-gov-green">{verifiedCount}</span>
-              <span className="metric-subtext">Multi-Sighting Confirmed</span>
-            </div>
-          </div>
-
-          <div className="gov-metric-card">
-            <span className="metric-label">PENDING VERIFICATION</span>
-            <div className="metric-num-row">
-              <span className="metric-number text-gov-amber">{pendingCount}</span>
-              <span className="metric-subtext">Under Review</span>
-            </div>
-          </div>
-
-          <div className="gov-metric-card">
-            <span className="metric-label">HIGH PRIORITY</span>
-            <div className="metric-num-row">
-              <span className="metric-number text-gov-red">{highPriorityCount}</span>
-              <span className="metric-subtext">≥ 90% Confidence</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Road Video Analysis Workflow */}
-        <VideoUploadCard
-          onVideoProcessed={(newApiIncidents) => {
-            if (newApiIncidents && newApiIncidents.length > 0) {
-              addIncidents(newApiIncidents);
-              const first = toDashboardIncident(newApiIncidents[0]);
-              setSelectedId(first.id);
-            }
-          }}
-        />
-
-        {/* Prominent Road Incident Map Section */}
-        <div className="gov-section-header">
-          <div>
-            <h3>Road Incident Map</h3>
-            <span className="section-sub">Geographic distribution of detected road incidents</span>
-          </div>
-          <div className="map-legend-gov">
-            <span><i className="dot dot-red" /> High Priority</span>
-            <span><i className="dot dot-amber" /> Medium</span>
-            <span><i className="dot dot-green" /> Verified / Resolved</span>
-          </div>
-        </div>
-
-        <div className={`gov-workspace ${isMapExpanded ? "expanded" : ""}`}>
-          <section className="gov-map-panel" aria-label="Road incidents map">
-            <div className="gov-panel-toolbar">
-              <div className="toolbar-title">
-                <MapPin size={15} /> Active Spatial Region
-              </div>
-              <div className="toolbar-controls">
-                <span className="count-tag">{filtered.length} locations displayed</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="btn-secondary-gov"
-                  onClick={() => setIsMapExpanded(!isMapExpanded)}
-                  title={isMapExpanded ? "Collapse to side view" : "Expand map canvas"}
+            {/* Floating Bottom-Left Filter Pills */}
+            <div className="absolute bottom-4 left-4 z-[400] flex flex-wrap gap-2 pr-4">
+              {filters.map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => setFilter(f.key)}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-xs font-medium backdrop-blur transition-all shadow-sm",
+                    filter === f.key
+                      ? "border-primary bg-primary text-primary-foreground font-semibold"
+                      : "border-border bg-card/90 text-foreground hover:bg-accent",
+                  )}
                 >
-                  {isMapExpanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-                  <span>{isMapExpanded ? "Standard View" : "Expand Map"}</span>
-                </Button>
-              </div>
-            </div>
-
-            <div className="gov-map-container">
-              <ClientOnly fallback={<div className="map-loading-gov">Loading OpenStreetMap Canvas…</div>}>
-                <Suspense fallback={<div className="map-loading-gov">Loading OpenStreetMap Canvas…</div>}>
-                  <IncidentMap incidents={filtered} selected={selected} onSelect={setSelectedId} />
-                </Suspense>
-              </ClientOnly>
-            </div>
-            <div className="gov-map-footer">
-              <span>OpenStreetMap GIS Engine</span>
-              <span>Click marker to view incident details</span>
-            </div>
-          </section>
-
-          <aside className="gov-detail-panel" aria-label="Incident details panel">
-            <IncidentPanel incident={selected} onClose={() => setSelectedId(null)} />
-          </aside>
-        </div>
-
-        {/* Administrative Incident Data Table */}
-        <section className="gov-table-section">
-          <div className="table-section-header">
-            <div>
-              <h3>Incident Log & Records</h3>
-              <p className="table-sub">Filter and review logged pothole detection records</p>
-            </div>
-
-            <div className="table-filter-bar">
-              <div className="table-search-box">
-                <Search size={14} className="search-icon" />
-                <input
-                  type="text"
-                  className="gov-input"
-                  placeholder="Filter by ID, area, or road segment..."
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-              </div>
-
-              <div className="status-filter-group">
-                {(["All incidents", "Verified", "Under review", "Resolved"] as FilterValue[]).map((statusOpt) => (
-                  <button
-                    key={statusOpt}
-                    type="button"
-                    className={`btn-filter-tag ${filter === statusOpt ? "active" : ""}`}
-                    onClick={() => setFilter(statusOpt)}
-                  >
-                    {statusOpt}
-                  </button>
-                ))}
-              </div>
+                  {f.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="table-wrapper">
-            <table className="gov-data-table">
-              <thead>
-                <tr>
-                  <th>INCIDENT ID</th>
-                  <th>LOCATION / ROAD SEGMENT</th>
-                  <th>CONFIDENCE</th>
-                  <th>SIGHTINGS</th>
-                  <th>STATUS</th>
-                  <th>LAST DETECTED</th>
-                  <th>ACTION</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length ? (
-                  filtered.map((incident) => (
-                    <tr
-                      key={incident.id}
-                      className={selectedId === incident.id ? "row-selected" : ""}
-                      onClick={() => {
-                        setSelectedId(incident.id);
-                        document
-                          .querySelector(".gov-workspace")
-                          ?.scrollIntoView({ behavior: "smooth", block: "center" });
-                      }}
-                    >
-                      <td className="font-mono font-bold text-gov-green">{incident.id}</td>
-                      <td>
-                        <strong>{incident.area}</strong>
-                        <div className="table-subtext">{incident.roadSegment}</div>
-                      </td>
-                      <td>
-                        <span className={`gov-conf-badge conf-${incident.confidence >= 90 ? "high" : incident.confidence >= 80 ? "medium" : "low"}`}>
-                          {incident.confidence}%
-                        </span>
-                      </td>
-                      <td>{incident.sightingCount}</td>
-                      <td>
-                        <span className={`gov-status-pill pill-${incident.status.toLowerCase().replace(" ", "-")}`}>
-                          {incident.status}
-                        </span>
-                      </td>
-                      <td className="table-date">{incident.lastSeen.split(", ")[1] || incident.lastSeen}</td>
-                      <td>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="btn-table-action"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedId(incident.id);
-                            document
-                              .querySelector(".gov-workspace")
-                              ?.scrollIntoView({ behavior: "smooth", block: "center" });
-                          }}
-                        >
-                          View Record
-                        </Button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={7} className="table-empty">
-                      No matching incident records found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          <div className="space-y-4">
+            <StatCards counts={counts} filter={filter} onFilter={(f) => setFilter(f)} />
+            <IncidentPanel incident={selectedIncident} onStatusChange={handleStatusChange} />
           </div>
         </section>
 
-        {/* Footer */}
-        <footer className="gov-footer">
-          <div className="footer-left">
-            <span className="footer-title">UrbanSense</span>
-            <span>Municipal Road Condition Monitoring System</span>
+        <UploadLab onVideoProcessed={handleVideoProcessed} />
+
+        {/* Incident Table */}
+        <section className="rounded-2xl border border-border bg-card p-4 sm:p-6 shadow-sm">
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="mr-auto text-xl font-semibold">Incident log</h2>
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by ID or area"
+                className="rounded-xl pl-9"
+              />
+            </div>
           </div>
 
-          <div className="footer-right">
-            <span>Smart India Hackathon 2026 Prototype</span>
-            <span className="footer-slash">•</span>
-            <span>For Demonstration Purposes Only</span>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                  {[
+                    { key: "id", label: "ID" },
+                    { key: "area", label: "Road / Area" },
+                    { key: "confidence", label: "Confidence" },
+                    { key: "sightingCount", label: "Sightings" },
+                    { key: "status", label: "Status" },
+                    { key: "lastSeen", label: "Last seen" },
+                  ].map((col) => (
+                    <th key={col.key} className="py-2 pr-4 font-medium">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 hover:text-foreground"
+                        onClick={() => {
+                          const k = col.key as typeof sortKey;
+                          if (sortKey === k) setSortDir(sortDir === 1 ? -1 : 1);
+                          else {
+                            setSortKey(k);
+                            setSortDir(1);
+                          }
+                        }}
+                      >
+                        {col.label}
+                        {sortKey === col.key && (sortDir === 1 ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />)}
+                      </button>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {visibleIncidents.map((inc) => (
+                  <tr
+                    key={inc.id}
+                    onClick={() => setSelectedId(inc.id)}
+                    className={cn(
+                      "cursor-pointer border-b border-border/60 transition-colors hover:bg-accent/40",
+                      selectedId === inc.id && "bg-accent/60 font-medium",
+                    )}
+                  >
+                    <td className="py-3 pr-4 font-mono text-xs text-primary">{inc.id}</td>
+                    <td className="py-3 pr-4">{inc.area}</td>
+                    <td className="py-3 pr-4">
+                      <div className="flex items-center gap-2">
+                        <span className="h-1.5 w-20 rounded-full bg-muted overflow-hidden">
+                          <span
+                            className="block h-1.5 rounded-full bg-emerald-500"
+                            style={{ width: `${inc.confidence}%` }}
+                          />
+                        </span>
+                        <span className="tabular-nums text-xs">{inc.confidence}%</span>
+                      </div>
+                    </td>
+                    <td className="py-3 pr-4 tabular-nums text-xs">{inc.sightingCount}</td>
+                    <td className="py-3 pr-4">
+                      <span
+                        className={cn(
+                          "inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                          inc.status === "Verified" && "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+                          inc.status === "Resolved" && "bg-slate-500/15 text-slate-600 dark:text-slate-400",
+                          inc.status !== "Verified" && inc.status !== "Resolved" && "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+                        )}
+                      >
+                        {inc.status}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-4 text-xs text-muted-foreground">{inc.lastSeen}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {visibleIncidents.length === 0 && (
+              <p className="py-10 text-center text-sm text-muted-foreground">
+                No matching incidents found.
+              </p>
+            )}
           </div>
+        </section>
+
+        <footer className="pb-6 text-xs text-muted-foreground flex justify-between items-center border-t border-border pt-4">
+          <span>UrbanSense Road Condition Monitoring Portal</span>
+          <span>Smart India Hackathon 2026</span>
         </footer>
-      </div>
-
-      {/* Floating Scroll Top */}
-      <button
-        type="button"
-        className="gov-scroll-top"
-        onClick={scrollToTop}
-        title="Scroll to top"
-        aria-label="Scroll to top"
-      >
-        <ArrowUp size={16} />
-      </button>
+      </main>
     </div>
   );
 }
