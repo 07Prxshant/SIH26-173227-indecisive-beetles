@@ -130,11 +130,20 @@ def run_ml_pipeline_on_file(
     description="Receives an uploaded .mp4 video, processes it with YOLOv8 & ByteTrack, streams events to Kafka & Fusion, and updates PostGIS."
 )
 async def upload_video(
-    video: UploadFile = File(...),
+    video: Optional[UploadFile] = File(None),
+    file: Optional[UploadFile] = File(None),
     gps: Optional[UploadFile] = File(None),
     latitude: Optional[float] = Form(None),
-    longitude: Optional[float] = Form(None)
+    longitude: Optional[float] = Form(None),
+    user_location: Optional[str] = Form(None)
 ) -> VideoProcessingResponse:
+    target_video = video or file
+    if target_video is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing video file. Provide a video file under parameter name 'video' or 'file'.",
+        )
+    video = target_video
     file_ext = Path(video.filename or "").suffix.lower()
     if file_ext not in ALLOWED_EXTENSIONS:
         allowed_str = ", ".join(sorted(ALLOWED_EXTENSIONS))
@@ -179,13 +188,17 @@ async def upload_video(
 
     try:
         user_loc = None
-        if latitude is not None or longitude is not None:
-            if latitude is None or longitude is None or not (-90.0 <= latitude <= 90.0) or not (-180.0 <= longitude <= 180.0):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid location coordinates. Latitude must be between -90 and 90, and Longitude between -180 and 180."
-                )
+        if latitude is not None and longitude is not None:
             user_loc = (float(latitude), float(longitude))
+        elif user_location:
+            try:
+                parts = [float(p.strip()) for p in user_location.split(",") if p.strip()]
+                if len(parts) == 2 and -90.0 <= parts[0] <= 90.0 and -180.0 <= parts[1] <= 180.0:
+                    user_loc = (parts[0], parts[1])
+                else:
+                    user_loc = (28.6139, 77.2090)
+            except Exception:
+                user_loc = (28.6139, 77.2090)
 
         result = await run_in_threadpool(
             run_ml_pipeline_on_file,

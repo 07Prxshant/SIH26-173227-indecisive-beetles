@@ -298,15 +298,22 @@ function UploadLab({ onVideoProcessed }: { onVideoProcessed: (incidents: Inciden
 
     try {
       const formData = new FormData();
+      formData.append("video", file);
       formData.append("file", file);
       if (locationText.trim()) {
         formData.append("user_location", locationText.trim());
+        const coords = locationText.split(",").map((s) => parseFloat(s.trim()));
+        if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+          formData.append("latitude", coords[0].toString());
+          formData.append("longitude", coords[1].toString());
+        }
       }
       if (gpsFile) {
-        formData.append("gps_file", gpsFile);
+        formData.append("gps", gpsFile);
       }
 
-      const res = await fetch(`${apiBaseUrl}/api/videos/upload`, {
+      const uploadUrl = apiBaseUrl.endsWith("/api/v1") ? `${apiBaseUrl}/videos/upload` : `${apiBaseUrl}/api/v1/videos/upload`;
+      const res = await fetch(uploadUrl, {
         method: "POST",
         body: formData,
       });
@@ -316,7 +323,7 @@ function UploadLab({ onVideoProcessed }: { onVideoProcessed: (incidents: Inciden
       }
 
       const data = await res.json();
-      const rawIncidents = data.fused_incidents || [];
+      const rawIncidents = data.fused_incidents || data.incidents || [];
       const dashIncidents = rawIncidents.map(toDashboardIncident);
 
       onVideoProcessed(dashIncidents);
