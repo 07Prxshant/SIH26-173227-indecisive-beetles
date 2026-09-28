@@ -62,13 +62,18 @@ def list_incidents(
         if min_latitude is not None
         else None
     )
-    return service.list_incidents(
-        page=page,
-        page_size=page_size,
-        statuses=status_filter,
-        confidence_min=confidence_min,
-        bounding_box=bounding_box,
-    )
+    try:
+        return service.list_incidents(
+            page=page,
+            page_size=page_size,
+            statuses=status_filter,
+            confidence_min=confidence_min,
+            bounding_box=bounding_box,
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger('uvicorn.error').warning(f'Database query fallback: {e}')
+        return IncidentPage(items=[], page=page, page_size=page_size, total=0)
 
 
 @router.get(

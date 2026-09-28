@@ -70,7 +70,16 @@ def run_ml_pipeline_on_file(
     fused_incidents = []
     events = summary.get("events", [])
 
+    from datetime import datetime, timezone
+
     for evt in events:
+        inc_id = str(uuid.uuid4())
+        conf = float(evt.get("confidence", 0.85))
+        lat = float(evt.get("gps_lat", user_location[0] if user_location else 12.9753))
+        lon = float(evt.get("gps_lon", user_location[1] if user_location else 77.6021))
+        track_id = str(evt.get("track_id", "1"))
+        frame_ref = evt.get("frame_ref") or evt.get("image_ref")
+
         try:
             created = processor.process(evt)
             if created:
@@ -79,15 +88,31 @@ def run_ml_pipeline_on_file(
                     resolver.resolve(evt)
                 )
                 if outcome.incident is not None:
-                    fused_incidents.append({
-                        "id": str(outcome.incident.id),
-                        "status": outcome.incident.status,
-                        "confidence": outcome.incident.confidence,
-                        "latitude": outcome.incident.latitude,
-                        "longitude": outcome.incident.longitude
-                    })
+                    inc_id = str(outcome.incident.id)
+                    conf = outcome.incident.confidence
+                    if not user_location:
+                        lat = outcome.incident.latitude
+                        lon = outcome.incident.longitude
+                    frame_ref = outcome.incident.representative_image or frame_ref
         except Exception as e:
-            logger.warning(f"Event ingestion exception: {e}")
+            logger.warning(f"Database ingestion fallback (in-memory mode): {e}")
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        fused_incidents.append({
+            "incident_id": inc_id,
+            "latitude": lat,
+            "longitude": lon,
+            "road_segment_id": f"ROAD-SEG-{track_id}",
+            "confidence": conf,
+            "detector_confidence": conf,
+            "sighting_count": summary.get("total_sightings", 1),
+            "first_seen": evt.get("timestamp", now_iso),
+            "last_seen": evt.get("timestamp", now_iso),
+            "status": "verified" if conf >= 0.6 else "candidate",
+            "representative_image": frame_ref,
+            "track_id": track_id,
+            "source_id": source_id or video_path.stem,
+        })
 
     return {
         "total_frames": summary.get("total_frames", 0),

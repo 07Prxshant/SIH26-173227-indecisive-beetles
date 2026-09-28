@@ -67,8 +67,21 @@ export const toDashboardIncident = (incident: ApiIncident): Incident => {
   };
 };
 
-export function useLiveIncidents(): Incident[] {
+export function useLiveIncidents(): {
+  incidents: Incident[];
+  addIncidents: (newItems: ApiIncident[]) => void;
+} {
   const [incidents, setIncidents] = useState<Incident[]>(mockIncidents);
+
+  const addIncidents = (newItems: ApiIncident[]) => {
+    if (!newItems || newItems.length === 0) return;
+    const formatted = newItems.map(toDashboardIncident);
+    setIncidents((current) => {
+      const existingIds = new Set(current.map((item) => item.id));
+      const filteredNew = formatted.filter((item) => !existingIds.has(item.id));
+      return [...filteredNew, ...current];
+    });
+  };
 
   useEffect(() => {
     let active = true;
@@ -132,5 +145,5 @@ export function useLiveIncidents(): Incident[] {
     };
   }, []);
 
-  return incidents;
+  return { incidents, addIncidents };
 }

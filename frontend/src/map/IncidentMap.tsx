@@ -2,16 +2,35 @@ import { useEffect } from "react";
 import { CircleMarker, MapContainer, TileLayer, Tooltip, useMap } from "react-leaflet";
 import type { Incident } from "@/types/incident";
 import { Button } from "@/components/ui/button";
+import { Locate, Maximize2, RotateCcw } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 
 function MapFocus({ selected }: { selected: Incident | undefined }) {
   const map = useMap();
   useEffect(() => {
-    if (selected)
+    if (selected) {
       map.flyTo([selected.latitude, selected.longitude], Math.max(map.getZoom(), 14), {
         duration: 0.65,
       });
+      setTimeout(() => map.invalidateSize(), 300);
+    }
   }, [map, selected]);
+  return null;
+}
+
+function MapResizeObserver() {
+  const map = useMap();
+  useEffect(() => {
+    const handleResize = () => {
+      map.invalidateSize();
+    };
+    window.addEventListener("resize", handleResize);
+    const timer = setTimeout(() => map.invalidateSize(), 400);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      clearTimeout(timer);
+    };
+  }, [map]);
   return null;
 }
 
@@ -28,10 +47,10 @@ function IncidentMarker({
     incident.status === "Resolved"
       ? "#80908b"
       : incident.confidence >= 90
-        ? "#da684e"
+        ? "#ef4444"
         : incident.confidence >= 80
-          ? "#dfa93c"
-          : "#457e70";
+          ? "#f59e0b"
+          : "#10b981";
   return (
     <CircleMarker
       center={[incident.latitude, incident.longitude]}
@@ -52,43 +71,7 @@ function IncidentMarker({
   );
 }
 
-export default function IncidentMap({
-  incidents,
-  selected,
-  onSelect,
-}: {
-  incidents: Incident[];
-  selected: Incident | undefined;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <MapContainer
-      center={[12.9778, 77.6024]}
-      zoom={13}
-      scrollWheelZoom={false}
-      zoomControl={false}
-      className="h-full w-full"
-      aria-label="Map of Bengaluru road incidents"
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      {incidents.map((incident) => (
-        <IncidentMarker
-          key={incident.id}
-          incident={incident}
-          selected={incident.id === selected?.id}
-          onSelect={onSelect}
-        />
-      ))}
-      <MapFocus selected={selected} />
-      <MapControls />
-    </MapContainer>
-  );
-}
-
-function MapControls() {
+function MapControls({ onResetView }: { onResetView?: () => void }) {
   const map = useMap();
   return (
     <div className="map-zoom" onClick={(event) => event.stopPropagation()}>
@@ -110,6 +93,62 @@ function MapControls() {
       >
         −
       </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        aria-label="Reset Map View"
+        title="Reset Map Center"
+        onClick={() => {
+          map.setView([28.6139, 77.2090], 12);
+          map.invalidateSize();
+          if (onResetView) onResetView();
+        }}
+      >
+        <Locate size={15} />
+      </Button>
     </div>
+  );
+}
+
+export default function IncidentMap({
+  incidents,
+  selected,
+  onSelect,
+}: {
+  incidents: Incident[];
+  selected: Incident | undefined;
+  onSelect: (id: string) => void;
+}) {
+  const defaultCenter: [number, number] = selected
+    ? [selected.latitude, selected.longitude]
+    : incidents.length > 0
+      ? [incidents[0].latitude, incidents[0].longitude]
+      : [28.6139, 77.2090];
+
+  return (
+    <MapContainer
+      center={defaultCenter}
+      zoom={13}
+      scrollWheelZoom={true}
+      zoomControl={false}
+      className="h-full w-full"
+      aria-label="Map of road incidents"
+    >
+      <TileLayer
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+      />
+      {incidents.map((incident) => (
+        <IncidentMarker
+          key={incident.id}
+          incident={incident}
+          selected={incident.id === selected?.id}
+          onSelect={onSelect}
+        />
+      ))}
+      <MapFocus selected={selected} />
+      <MapResizeObserver />
+      <MapControls />
+    </MapContainer>
   );
 }
