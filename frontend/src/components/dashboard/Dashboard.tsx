@@ -602,8 +602,8 @@ export default function Dashboard() {
       <Header theme={theme} onToggleTheme={() => setTheme(theme === "dark" ? "light" : "dark")} />
 
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
-        <section className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
-          <div className="relative h-[460px] overflow-hidden rounded-3xl border border-border shadow-sm lg:h-[620px]">
+        <section className="grid gap-4 lg:grid-cols-[1.6fr_1fr] items-stretch">
+          <div className="relative min-h-[480px] h-[520px] lg:h-full overflow-hidden rounded-3xl border border-border shadow-sm">
             <ClientOnly fallback={<div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading GIS Map...</div>}>
               <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading GIS Map...</div>}>
                 <IncidentMap
@@ -644,9 +644,11 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4">
             <StatCards counts={counts} filter={filter} onFilter={(f) => setFilter(f)} />
-            <IncidentPanel incident={selectedIncident} onStatusChange={handleStatusChange} />
+            <div className="flex-1">
+              <IncidentPanel incident={selectedIncident} onStatusChange={handleStatusChange} />
+            </div>
           </div>
         </section>
 
