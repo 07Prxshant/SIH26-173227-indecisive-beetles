@@ -27,6 +27,11 @@ def create_app() -> FastAPI:
     )
     application.include_router(api_router)
 
+    @application.get("/health")
+    def health_check():
+        return {"status": "ok", "service": "urbansense-backend"}
+
+
     uploads_dir = Path("data/uploads")
     uploads_dir.mkdir(parents=True, exist_ok=True)
     application.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")

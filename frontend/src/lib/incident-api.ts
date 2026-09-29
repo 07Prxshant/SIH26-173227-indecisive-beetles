@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { mockIncidents } from "@/map/mock-incidents";
 import type { Incident, IncidentStatus } from "@/types/incident";
 
-export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
+export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? import.meta.env.VITE_BACKEND_URL ?? import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
 
 export type ApiIncident = {
   incident_id: string;
@@ -103,7 +103,7 @@ export function useLiveIncidents(): {
 
     const connectWebSocket = () => {
       if (!active) return;
-      const websocketUrl = `${apiBaseUrl.replace(/^http/, "ws")}/live-feed`;
+      const websocketUrl = `${apiBaseUrl.replace(/^https?/, (m) => (m === "https" ? "wss" : "ws"))}/live-feed`;
       socket = new WebSocket(websocketUrl);
 
       socket.onopen = () => {
