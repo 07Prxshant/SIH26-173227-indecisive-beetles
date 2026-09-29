@@ -9,5 +9,9 @@ kafka-python-ng>=2.2,<3.0
 jsonschema>=4.23,<5.0
 pytest>=8.0,<9.0
 httpx>=0.27,<1.0
-
 python-multipart>=0.0.9
+
+ultralytics
+opencv-python-headless
+lapx
+pandas
