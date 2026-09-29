@@ -28,6 +28,12 @@ ALLOWED_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 PROCESSING_JOBS: Dict[str, Dict[str, Any]] = {}
 
 
+class SeverityBreakdown(BaseModel):
+    High: int = 0
+    Medium: int = 0
+    Low: int = 0
+
+
 class VideoProcessingResponse(BaseModel):
     job_id: str
     status: str
@@ -36,6 +42,7 @@ class VideoProcessingResponse(BaseModel):
     potholes_detected: int
     events_generated: int
     message: str
+    severity_breakdown: SeverityBreakdown = SeverityBreakdown()
     incidents: list[dict] = []
 
 
@@ -69,6 +76,7 @@ def run_ml_pipeline_on_file(
 
     fused_incidents = []
     events = summary.get("events", [])
+    sev_counts = summary.get("severity_breakdown", {"High": 0, "Medium": 0, "Low": 0})
 
     from datetime import datetime, timezone
 
@@ -112,12 +120,19 @@ def run_ml_pipeline_on_file(
             "representative_image": frame_ref,
             "track_id": track_id,
             "source_id": source_id or video_path.stem,
+            "severity": "High" if conf >= 0.85 else "Medium" if conf >= 0.70 else "Low"
         })
+
+    high_c = sum(1 for i in fused_incidents if i.get("confidence", 0) >= 0.85)
+    med_c = sum(1 for i in fused_incidents if 0.70 <= i.get("confidence", 0) < 0.85)
+    low_c = sum(1 for i in fused_incidents if i.get("confidence", 0) < 0.70)
+    sev_counts = {"High": high_c, "Medium": med_c, "Low": low_c}
 
     return {
         "total_frames": summary.get("total_frames", 0),
         "potholes_detected": summary.get("total_sightings", 0),
         "events_generated": summary.get("events_generated", 0),
+        "severity_breakdown": sev_counts,
         "events": events,
         "fused_incidents": fused_incidents
     }
@@ -211,6 +226,7 @@ async def upload_video(
         potholes = result["potholes_detected"]
         events_cnt = result["events_generated"]
         frames_cnt = result["total_frames"]
+        sev_bd = result["severity_breakdown"]
 
         if potholes == 0:
             msg = "Processing completed. No potholes were detected in this video."
@@ -224,6 +240,7 @@ async def upload_video(
             "total_frames": frames_cnt,
             "potholes_detected": potholes,
             "events_generated": events_cnt,
+            "severity_breakdown": sev_bd,
             "message": msg
         }
 
@@ -234,6 +251,7 @@ async def upload_video(
             total_frames=frames_cnt,
             potholes_detected=potholes,
             events_generated=events_cnt,
+            severity_breakdown=SeverityBreakdown(**sev_bd),
             message=msg,
             incidents=result["fused_incidents"]
         )

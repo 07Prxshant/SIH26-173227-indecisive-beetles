@@ -163,6 +163,7 @@ def run_replay(
         "total_sightings": len(raw_detections),
         "events_generated": len(events),
         "events_published": published_count,
+        "severity_breakdown": stats.get("severity_breakdown", {"High": 0, "Medium": 0, "Low": 0}),
         "events": events
     }
 

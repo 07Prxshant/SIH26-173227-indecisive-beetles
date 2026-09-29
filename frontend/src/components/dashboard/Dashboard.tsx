@@ -270,6 +270,12 @@ function UploadLab({ onVideoProcessed }: { onVideoProcessed: (incidents: Inciden
   const [isProcessing, setIsProcessing] = useState(false);
   const [progressMsg, setProgressMsg] = useState("");
   const [dragOver, setDragOver] = useState(false);
+  const [stats, setStats] = useState<{
+    total_frames: number;
+    potholes_detected: number;
+    events_generated: number;
+    severity_breakdown: { High: number; Medium: number; Low: number };
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const requestDeviceLocation = () => {
@@ -325,6 +331,13 @@ function UploadLab({ onVideoProcessed }: { onVideoProcessed: (incidents: Inciden
       const data = await res.json();
       const rawIncidents = data.fused_incidents || data.incidents || [];
       const dashIncidents = rawIncidents.map(toDashboardIncident);
+
+      setStats({
+        total_frames: data.total_frames || 0,
+        potholes_detected: data.potholes_detected || 0,
+        events_generated: data.events_generated || 0,
+        severity_breakdown: data.severity_breakdown || { High: 0, Medium: 0, Low: 0 },
+      });
 
       onVideoProcessed(dashIncidents);
       setProgressMsg(`Analysis complete! Processed ${dashIncidents.length} incidents.`);
@@ -444,32 +457,75 @@ function UploadLab({ onVideoProcessed }: { onVideoProcessed: (incidents: Inciden
           </span>
         </div>
 
-        <div className="mt-4 rounded-xl border border-border bg-card p-4 text-xs space-y-2">
-          <h4 className="font-semibold text-sm">Processing Pipeline</h4>
-          <div className="grid grid-cols-4 gap-2 text-center text-[11px]">
-            <div className="rounded bg-accent/60 p-2">
-              <span className="block font-bold">1. Footage</span>
-              <span className="text-muted-foreground">Video Intake</span>
+        {stats && (
+          <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs space-y-3 animate-in fade-in duration-300">
+            <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2">
+              <span className="font-bold text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                <span className="size-2 rounded-full bg-emerald-500 animate-ping inline-block" />
+                Video Analysis Results
+              </span>
+              <span className="text-[11px] text-muted-foreground font-mono">{stats.total_frames} Frames Scanned</span>
             </div>
-            <div className="rounded bg-accent/60 p-2">
-              <span className="block font-bold">2. Detection</span>
-              <span className="text-muted-foreground">YOLOv8 Inference</span>
+
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg bg-card p-2.5 border border-border">
+                <span className="block text-lg font-extrabold text-foreground tabular-nums">{stats.potholes_detected}</span>
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Pothole Sightings</span>
+              </div>
+              <div className="rounded-lg bg-card p-2.5 border border-border">
+                <span className="block text-lg font-extrabold text-foreground tabular-nums">{stats.total_frames}</span>
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Frames Scanned</span>
+              </div>
+              <div className="rounded-lg bg-card p-2.5 border border-border">
+                <span className="block text-lg font-extrabold text-foreground tabular-nums">{stats.events_generated}</span>
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Geotagged Events</span>
+              </div>
             </div>
-            <div className="rounded bg-accent/60 p-2">
-              <span className="block font-bold">3. Fusion</span>
-              <span className="text-muted-foreground">Kafka Stream</span>
-            </div>
-            <div className="rounded bg-accent/60 p-2">
-              <span className="block font-bold">4. Review</span>
-              <span className="text-muted-foreground">Geotagged Log</span>
+
+            <div className="pt-1">
+              <span className="block text-[11px] font-semibold text-muted-foreground mb-1.5">Detection Severity Breakdown:</span>
+              <div className="flex items-center gap-2">
+                <span className="flex-1 rounded-md bg-rose-500/15 text-rose-600 dark:text-rose-400 px-2 py-1 text-center font-semibold text-[11px] border border-rose-500/20">
+                  High: {stats.severity_breakdown.High}
+                </span>
+                <span className="flex-1 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2 py-1 text-center font-semibold text-[11px] border border-amber-500/20">
+                  Medium: {stats.severity_breakdown.Medium}
+                </span>
+                <span className="flex-1 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 px-2 py-1 text-center font-semibold text-[11px] border border-emerald-500/20">
+                  Low: {stats.severity_breakdown.Low}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {!stats && (
+          <div className="mt-4 rounded-xl border border-border bg-card p-4 text-xs space-y-2">
+            <h4 className="font-semibold text-sm">Processing Pipeline</h4>
+            <div className="grid grid-cols-4 gap-2 text-center text-[11px]">
+              <div className="rounded bg-accent/60 p-2">
+                <span className="block font-bold">1. Footage</span>
+                <span className="text-muted-foreground">Video Intake</span>
+              </div>
+              <div className="rounded bg-accent/60 p-2">
+                <span className="block font-bold">2. Detection</span>
+                <span className="text-muted-foreground">YOLOv8 Inference</span>
+              </div>
+              <div className="rounded bg-accent/60 p-2">
+                <span className="block font-bold">3. Fusion</span>
+                <span className="text-muted-foreground">Kafka Stream</span>
+              </div>
+              <div className="rounded bg-accent/60 p-2">
+                <span className="block font-bold">4. Review</span>
+                <span className="text-muted-foreground">Geotagged Log</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );
 }
-
 export default function Dashboard() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const { incidents: initialIncidents, loading, error, addIncidents } = useLiveIncidents();

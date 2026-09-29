@@ -94,6 +94,11 @@ def run_mock_inference(
     avg_conf = round(conf_sum / max(1, len(detections)), 4) if detections else 0.0
     duration_sec = round(total_frames / max(1.0, fps), 2)
 
+    high_cnt = sum(1 for d in detections if d.get("confidence", 0) >= 0.85)
+    med_cnt = sum(1 for d in detections if 0.70 <= d.get("confidence", 0) < 0.85)
+    low_cnt = sum(1 for d in detections if d.get("confidence", 0) < 0.70)
+    severity_breakdown = {"High": high_cnt, "Medium": med_cnt, "Low": low_cnt}
+
     stats = {
         "source_id": src_id,
         "video_path": str(video_path.resolve()),
@@ -103,6 +108,7 @@ def run_mock_inference(
         "total_detections": len(detections),
         "frames_with_detections": len(frames_with_dets),
         "avg_confidence": avg_conf,
+        "severity_breakdown": severity_breakdown,
         "detections": detections
     }
 
@@ -248,6 +254,11 @@ def run_opencv_inference(
     avg_conf = round(conf_sum / max(1, len(detections)), 4) if detections else 0.0
     duration_sec = round(frame_id / max(1.0, fps), 2)
 
+    high_cnt = sum(1 for d in detections if d.get("confidence", 0) >= 0.85)
+    med_cnt = sum(1 for d in detections if 0.70 <= d.get("confidence", 0) < 0.85)
+    low_cnt = sum(1 for d in detections if d.get("confidence", 0) < 0.70)
+    severity_breakdown = {"High": high_cnt, "Medium": med_cnt, "Low": low_cnt}
+
     stats = {
         "source_id": src_id,
         "video_path": str(video_path.resolve()),
@@ -257,6 +268,7 @@ def run_opencv_inference(
         "total_detections": len(detections),
         "frames_with_detections": len(frames_with_dets),
         "avg_confidence": avg_conf,
+        "severity_breakdown": severity_breakdown,
         "detections": detections
     }
 
