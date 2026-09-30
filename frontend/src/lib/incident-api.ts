@@ -3,7 +3,29 @@ import { mockIncidents } from "@/map/mock-incidents";
 import type { Incident, IncidentStatus } from "@/types/incident";
 
 const env = import.meta.env as Record<string, string | undefined>;
-export const apiBaseUrl = env["VITE_API_BASE_URL"] ?? env["VITE_BACKEND_URL"] ?? env["VITE_API_URL"] ?? "http://localhost:8000/api/v1";
+
+function getNormalizedApiBaseUrl(): string {
+  let raw = (
+    env["VITE_API_BASE_URL"] ??
+    env["VITE_BACKEND_URL"] ??
+    env["VITE_API_URL"] ??
+    "http://localhost:8000/api/v1"
+  ).trim();
+
+  raw = raw.replace(/\/+$/, "");
+
+  if (!raw.endsWith("/api/v1")) {
+    if (raw.endsWith("/api")) {
+      raw = `${raw}/v1`;
+    } else {
+      raw = `${raw}/api/v1`;
+    }
+  }
+
+  return raw;
+}
+
+export const apiBaseUrl = getNormalizedApiBaseUrl();
 
 export type ApiIncident = {
   incident_id: string;

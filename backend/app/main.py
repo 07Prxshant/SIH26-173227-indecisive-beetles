@@ -1,7 +1,7 @@
 """FastAPI application entry point for the UrbanSense backend."""
 
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -27,10 +27,27 @@ def create_app() -> FastAPI:
     )
     application.include_router(api_router)
 
+    @application.websocket("/live-feed")
+    async def root_live_feed(websocket: WebSocket):
+        from app.services.live_feed import live_feed_manager
+        from fastapi import WebSocketDisconnect
+        await live_feed_manager.connect(websocket)
+        try:
+            while True:
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            live_feed_manager.disconnect(websocket)
+        except Exception:
+            live_feed_manager.disconnect(websocket)
+
+    @application.get("/incidents")
+    def root_incidents():
+        from app.api.routes.incidents import list_incidents, IncidentQueryService
+        return list_incidents(service=IncidentQueryService())
+
     @application.get("/health")
     def health_check():
         return {"status": "ok", "service": "urbansense-backend"}
-
 
     uploads_dir = Path("data/uploads")
     uploads_dir.mkdir(parents=True, exist_ok=True)

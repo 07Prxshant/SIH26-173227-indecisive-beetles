@@ -330,7 +330,7 @@ function UploadLab({ onVideoProcessed }: { onVideoProcessed: (incidents: Inciden
         formData.append("gps", gpsFile);
       }
 
-      const uploadUrl = apiBaseUrl.endsWith("/api/v1") ? `${apiBaseUrl}/videos/upload` : `${apiBaseUrl}/api/v1/videos/upload`;
+      const uploadUrl = apiBaseUrl.endsWith("/videos/upload") ? apiBaseUrl : `${apiBaseUrl}/videos/upload`;
       const res = await fetch(uploadUrl, {
         method: "POST",
         body: formData,
