@@ -283,14 +283,24 @@ function UploadLab({ onVideoProcessed }: { onVideoProcessed: (incidents: Inciden
       alert("Geolocation is not supported by your browser.");
       return;
     }
+    setLocationText("Fetching current location...");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLocationText(`${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`);
       },
-      () => {
-        setLocationText("28.6139, 77.2090");
+      (err) => {
+        console.warn("High accuracy geolocation timeout, falling back to standard accuracy:", err);
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            setLocationText(`${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`);
+          },
+          () => {
+            setLocationText("28.6139, 77.2090");
+          },
+          { enableHighAccuracy: false, timeout: 8000 }
+        );
       },
-      { timeout: 5000 }
+      { enableHighAccuracy: true, timeout: 5000 }
     );
   };
 

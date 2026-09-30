@@ -1,6 +1,40 @@
+from __future__ import annotations
+
+
+CITY_COORDINATES = {
+    "kota": (25.2138, 75.8648),
+    "delhi": (28.6139, 77.2090),
+    "noida": (28.5708, 77.3820),
+    "bengaluru": (12.9716, 77.5946),
+    "bangalore": (12.9716, 77.5946),
+    "mumbai": (18.9440, 72.8230),
+    "hyderabad": (17.4435, 78.3772),
+    "khan market": (28.6003, 77.2270),
+    "connaught place": (28.6315, 77.2167),
+    "sector 52": (28.5708, 77.3820),
+    "hitech city": (17.4435, 78.3772),
+    "marine drive": (18.9440, 72.8230),
+}
+
+def resolve_location(loc_str: str | None) -> tuple[float, float]:
+    if not loc_str or not loc_str.strip():
+        return (28.6139, 77.2090)
+    cleaned = loc_str.strip().lower()
+    try:
+        parts = [float(p.strip()) for p in cleaned.split(",") if p.strip()]
+        if len(parts) == 2 and -90.0 <= parts[0] <= 90.0 and -180.0 <= parts[1] <= 180.0:
+            return (parts[0], parts[1])
+    except Exception:
+        pass
+
+    for key, coords in CITY_COORDINATES.items():
+        if key in cleaned:
+            return coords
+
+    return (28.6139, 77.2090)
+
 """REST endpoint for uploading road video and processing with YOLOv8 + ByteTrack pipeline."""
 
-from __future__ import annotations
 
 import json
 import logging
@@ -206,14 +240,7 @@ async def upload_video(
         if latitude is not None and longitude is not None:
             user_loc = (float(latitude), float(longitude))
         elif user_location:
-            try:
-                parts = [float(p.strip()) for p in user_location.split(",") if p.strip()]
-                if len(parts) == 2 and -90.0 <= parts[0] <= 90.0 and -180.0 <= parts[1] <= 180.0:
-                    user_loc = (parts[0], parts[1])
-                else:
-                    user_loc = (28.6139, 77.2090)
-            except Exception:
-                user_loc = (28.6139, 77.2090)
+            user_loc = resolve_location(user_location)
 
         result = await run_in_threadpool(
             run_ml_pipeline_on_file,
