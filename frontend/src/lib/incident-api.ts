@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { mockIncidents } from "@/map/mock-incidents";
 import type { Incident, IncidentStatus } from "@/types/incident";
 
-export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? import.meta.env.VITE_BACKEND_URL ?? import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
+const env = import.meta.env as Record<string, string | undefined>;
+export const apiBaseUrl = env["VITE_API_BASE_URL"] ?? env["VITE_BACKEND_URL"] ?? env["VITE_API_URL"] ?? "http://localhost:8000/api/v1";
 
 export type ApiIncident = {
   incident_id: string;
@@ -38,9 +39,38 @@ const statusFor = (status: ApiIncident["status"]): IncidentStatus => {
 
 export const toDashboardIncident = (incident: ApiIncident): Incident => {
   const confidence = Math.round(incident.confidence * 100);
-  const detectorConfidence = incident.detector_confidence != null
-    ? Math.round(incident.detector_confidence * 100)
-    : undefined;
+  const lat = incident.latitude ?? 28.6139;
+  const lon = incident.longitude ?? 77.2090;
+
+  const result: Incident = {
+    id: incident.incident_id,
+    latitude: lat,
+    longitude: lon,
+    lat,
+    lng: lon,
+    confidence,
+    sightingCount: incident.sighting_count,
+    sightings: incident.sighting_count,
+    firstSeen: formatSeenAt(incident.first_seen),
+    lastSeen: formatSeenAt(incident.last_seen),
+    firstDetected: formatSeenAt(incident.first_seen),
+    lastDetected: formatSeenAt(incident.last_seen),
+    roadSegment: incident.road_segment_id,
+    area: incident.road_segment_id,
+    road: incident.road_segment_id,
+    status: statusFor(incident.status),
+    severity: confidence >= 90 ? "High" : confidence >= 70 ? "Medium" : "Low",
+  };
+
+  if (incident.detector_confidence != null) {
+    result.detectorConfidence = Math.round(incident.detector_confidence * 100);
+  }
+  if (incident.track_id) {
+    result.trackId = incident.track_id;
+  }
+  if (incident.source_id) {
+    result.sourceId = incident.source_id;
+  }
 
   let imageUrl = incident.representative_image ?? undefined;
   if (imageUrl && imageUrl.startsWith("/")) {
@@ -48,34 +78,29 @@ export const toDashboardIncident = (incident: ApiIncident): Incident => {
     imageUrl = `${host}${imageUrl}`;
   }
 
-  return {
-    id: incident.incident_id,
-    latitude: incident.latitude,
-    longitude: incident.longitude,
-    confidence,
-    detectorConfidence,
-    trackId: incident.track_id ?? undefined,
-    sourceId: incident.source_id ?? undefined,
-    sightingCount: incident.sighting_count,
-    firstSeen: formatSeenAt(incident.first_seen),
-    lastSeen: formatSeenAt(incident.last_seen),
-    roadSegment: incident.road_segment_id,
-    area: incident.road_segment_id,
-    status: statusFor(incident.status),
-    severity: confidence >= 90 ? "High" : confidence >= 70 ? "Medium" : "Low",
-    image: imageUrl,
-  };
+  if (imageUrl) {
+    result.image = imageUrl;
+    result.representativeImage = imageUrl;
+  }
+
+  return result;
 };
 
 export function useLiveIncidents(): {
   incidents: Incident[];
-  addIncidents: (newItems: ApiIncident[]) => void;
+  addIncidents: (newItems: ApiIncident[] | Incident[]) => void;
+  loading: boolean;
+  error: string | null;
 } {
   const [incidents, setIncidents] = useState<Incident[]>(mockIncidents);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const addIncidents = (newItems: ApiIncident[]) => {
+  const addIncidents = (newItems: ApiIncident[] | Incident[]) => {
     if (!newItems || newItems.length === 0) return;
-    const formatted = newItems.map(toDashboardIncident);
+    const formatted = newItems.map((item) =>
+      "incident_id" in item ? toDashboardIncident(item) : item
+    );
     setIncidents((current) => {
       const existingIds = new Set(current.map((item) => item.id));
       const filteredNew = formatted.filter((item) => !existingIds.has(item.id));
@@ -89,21 +114,28 @@ export function useLiveIncidents(): {
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const fetchAllIncidents = () => {
+      setLoading(true);
       void fetch(`${apiBaseUrl}/incidents`)
         .then((response) => (response.ok ? response.json() : Promise.reject(response)))
         .then((payload: { items: ApiIncident[] }) => {
           if (active && payload.items && payload.items.length > 0) {
             setIncidents(payload.items.map(toDashboardIncident));
           }
+          if (active) setLoading(false);
         })
-        .catch(() => undefined);
+        .catch((err) => {
+          if (active) {
+            setError(String(err));
+            setLoading(false);
+          }
+        });
     };
 
     fetchAllIncidents();
 
     const connectWebSocket = () => {
       if (!active) return;
-      const websocketUrl = `${apiBaseUrl.replace(/^https?/, (m) => (m === "https" ? "wss" : "ws"))}/live-feed`;
+      const websocketUrl = `${apiBaseUrl.replace(/^https?/, (m: string) => (m === "https" ? "wss" : "ws"))}/live-feed`;
       socket = new WebSocket(websocketUrl);
 
       socket.onopen = () => {
@@ -145,5 +177,5 @@ export function useLiveIncidents(): {
     };
   }, []);
 
-  return { incidents, addIncidents };
+  return { incidents, addIncidents, loading, error };
 }

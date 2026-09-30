@@ -119,10 +119,11 @@ export default function IncidentMap({
   selected: Incident | undefined;
   onSelect: (id: string) => void;
 }) {
+  const firstInc = incidents[0];
   const defaultCenter: [number, number] = selected
     ? [selected.latitude, selected.longitude]
-    : incidents.length > 0
-      ? [incidents[0].latitude, incidents[0].longitude]
+    : firstInc
+      ? [firstInc.latitude, firstInc.longitude]
       : [28.6139, 77.2090];
 
   return (

@@ -309,9 +309,11 @@ function UploadLab({ onVideoProcessed }: { onVideoProcessed: (incidents: Inciden
       if (locationText.trim()) {
         formData.append("user_location", locationText.trim());
         const coords = locationText.split(",").map((s) => parseFloat(s.trim()));
-        if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
-          formData.append("latitude", coords[0].toString());
-          formData.append("longitude", coords[1].toString());
+        const latVal = coords[0];
+        const lngVal = coords[1];
+        if (coords.length === 2 && latVal !== undefined && lngVal !== undefined && !isNaN(latVal) && !isNaN(lngVal)) {
+          formData.append("latitude", latVal.toString());
+          formData.append("longitude", lngVal.toString());
         }
       }
       if (gpsFile) {
@@ -539,7 +541,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (initialIncidents && initialIncidents.length > 0) {
       setIncidentsList(initialIncidents);
-      if (!selectedId) setSelectedId(initialIncidents[0].id);
+      if (!selectedId && initialIncidents[0]) setSelectedId(initialIncidents[0].id);
     }
   }, [initialIncidents]);
 
@@ -590,7 +592,7 @@ export default function Dashboard() {
   };
 
   const handleVideoProcessed = (newIncidents: Incident[]) => {
-    if (newIncidents.length > 0) {
+    if (newIncidents.length > 0 && newIncidents[0]) {
       addIncidents(newIncidents);
       setIncidentsList((prev) => [...newIncidents, ...prev]);
       setSelectedId(newIncidents[0].id);

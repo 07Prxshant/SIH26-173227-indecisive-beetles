@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import frameAsset from "@/assets/detection-frame.jpg";
 import type { Incident } from "@/types/incident";
 
-const fmtDate = (iso: string) => {
+const fmtDate = (iso?: string) => {
   if (!iso) return "N/A";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
@@ -35,8 +35,8 @@ export function IncidentPanel({
     );
   }
 
-  const isVerified = incident.status === "Verified";
-  const isResolved = incident.status === "Resolved";
+  const isVerified = incident.status === "Verified" || incident.status === "verified";
+  const isResolved = incident.status === "Resolved" || incident.status === "resolved";
   const confVal = fmtConf(incident.confidence);
   const lat = incident.latitude ?? incident.lat ?? 28.6139;
   const lng = incident.longitude ?? incident.lng ?? 77.2090;

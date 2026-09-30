@@ -1,73 +1,79 @@
-import { useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
-import L from "leaflet";
+import { useEffect } from "react";
+import { CircleMarker, MapContainer, TileLayer, Tooltip, useMap } from "react-leaflet";
+import type { Incident } from "@/types/incident";
 import "leaflet/dist/leaflet.css";
-import { isHighPriority, type Incident } from "@/lib/types";
 
-function markerClass(i: Incident, selected: boolean, isNew: boolean) {
-  const tone = isHighPriority(i)
-    ? "us-marker--hazard"
-    : i.status === "verified"
-      ? "us-marker--verified"
-      : i.status === "review"
-        ? "us-marker--review"
-        : "us-marker--resolved";
-  return ["us-marker", tone, selected ? "us-marker--selected" : "", isNew ? "us-marker--new" : ""]
-    .filter(Boolean)
-    .join(" ");
-}
-
-function FlyTo({ incident }: { incident: Incident | null }) {
+function MapFocus({ selected }: { selected: Incident | undefined }) {
   const map = useMap();
   useEffect(() => {
-    if (incident) map.flyTo([incident.lat, incident.lng], 15, { duration: 0.8 });
-  }, [incident, map]);
+    if (selected) {
+      const lat = selected.latitude ?? selected.lat ?? 28.6139;
+      const lng = selected.longitude ?? selected.lng ?? 77.2090;
+      map.flyTo([lat, lng], 15, { duration: 0.8 });
+    }
+  }, [map, selected]);
   return null;
 }
 
-export default function IncidentMap({
+export function IncidentMap({
   incidents,
   selectedId,
-  newId,
   onSelect,
 }: {
   incidents: Incident[];
   selectedId: string | null;
-  newId: string | null;
   onSelect: (id: string) => void;
 }) {
-  const selected = useMemo(
-    () => incidents.find((i) => i.id === selectedId) ?? null,
-    [incidents, selectedId],
-  );
+  const first = incidents[0];
+  const centerLat = first ? (first.latitude ?? first.lat ?? 28.6139) : 28.6139;
+  const centerLng = first ? (first.longitude ?? first.lng ?? 77.2090) : 77.2090;
 
   return (
     <MapContainer
-      center={[12.9716, 77.5946]}
+      center={[centerLat, centerLng]}
       zoom={13}
-      scrollWheelZoom
-      className="h-full w-full"
       zoomControl={false}
-      attributionControl={false}
+      className="h-full w-full"
     >
-      <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" />
-      <FlyTo incident={selected} />
-      {incidents.map((i) => (
-        <Marker
-          key={i.id}
-          position={[i.lat, i.lng]}
-          keyboard
-          alt={`${i.id} on ${i.road}`}
-          title={`${i.id} — ${i.road}`}
-          icon={L.divIcon({
-            className: "",
-            html: `<span class="${markerClass(i, i.id === selectedId, i.id === newId)}" role="img" aria-label="${i.id}"></span>`,
-            iconSize: [18, 18],
-            iconAnchor: [9, 9],
-          })}
-          eventHandlers={{ click: () => onSelect(i.id), keypress: () => onSelect(i.id) }}
-        />
-      ))}
+      <TileLayer
+        attribution="&copy; OpenStreetMap"
+        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+      />
+      {incidents.map((i) => {
+        const lat = i.latitude ?? i.lat ?? 28.6139;
+        const lng = i.longitude ?? i.lng ?? 77.2090;
+        const isSelected = i.id === selectedId;
+        const color =
+          i.status === "Resolved" || i.status === "resolved"
+            ? "#80908b"
+            : i.confidence >= 90
+            ? "#ef4444"
+            : i.confidence >= 80
+            ? "#f59e0b"
+            : "#10b981";
+
+        return (
+          <CircleMarker
+            key={i.id}
+            center={[lat, lng]}
+            radius={isSelected ? 14 : 9}
+            pathOptions={{
+              color: "#ffffff",
+              weight: isSelected ? 3 : 2,
+              fillColor: color,
+              fillOpacity: 1,
+            }}
+            eventHandlers={{ click: () => onSelect(i.id) }}
+          >
+            <Tooltip direction="top" offset={[0, -10]}>
+              {i.area || i.roadSegment || i.id} · {i.confidence}%
+            </Tooltip>
+          </CircleMarker>
+        );
+      })}
+      <MapFocus selected={incidents.find((i) => i.id === selectedId)} />
     </MapContainer>
   );
 }
+
+export default IncidentMap;
