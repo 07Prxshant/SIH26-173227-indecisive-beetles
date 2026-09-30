@@ -1,6 +1,6 @@
-# UrbanSense — Pothole Detection MVP (SIH 2026)
+# MIRA — Mobile Intelligence for Road Analytics (SIH 2026)
 
-UrbanSense (SIH26124) transforms public-bus video telemetry and synchronized GPS tracks into corroboration-scored pothole incidents displayed on an interactive real-time map.
+MIRA (SIH26124) transforms public-bus video telemetry and synchronized GPS tracks into corroboration-scored pothole incidents displayed on an interactive real-time map.
 
 ---
 

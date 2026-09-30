@@ -4,13 +4,13 @@ import Dashboard from "@/components/dashboard/Dashboard";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "UrbanSense | Road Incident Overview" },
+      { title: "MIRA (Mobile Intelligence for Road Analytics) | Road Incident Overview" },
       {
         name: "description",
         content:
           "Explore an illustrative map of detected road incidents, confidence scores, and sighting details in Bengaluru.",
       },
-      { property: "og:title", content: "UrbanSense | Road Incident Overview" },
+      { property: "og:title", content: "MIRA (Mobile Intelligence for Road Analytics) | Road Incident Overview" },
       {
         property: "og:description",
         content:

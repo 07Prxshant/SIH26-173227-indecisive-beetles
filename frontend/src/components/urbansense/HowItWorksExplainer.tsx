@@ -5,7 +5,7 @@ export function HowItWorksExplainer() {
   return (
     <section className="gov-card explainer-card">
       <div className="explainer-header">
-        <h3>How UrbanSense Works</h3>
+        <h3>How MIRA Works</h3>
         <p>Road footage is analysed to detect potholes, associate their location and create incidents for review.</p>
       </div>
 

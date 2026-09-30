@@ -8,8 +8,8 @@ export function Header({ theme, onToggleTheme }: { theme: "dark" | "light"; onTo
           <span className="lane-mark block h-1 w-5 rounded-full" />
         </div>
         <div className="mr-auto">
-          <p className="font-display text-lg leading-none font-semibold">UrbanSense</p>
-          <p className="text-xs text-muted-foreground">Road condition monitoring</p>
+          <p className="font-display text-lg leading-none font-semibold">MIRA</p>
+          <p className="text-xs text-muted-foreground">Mobile Intelligence for Road Analytics</p>
         </div>
         <span className="hidden items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground sm:inline-flex">
           <span className="relative flex size-2">
